@@ -1,0 +1,19 @@
+# One-click deploy on Render: New → Blueprint → select this repo.
+services:
+  - type: web
+    name: mediagrab
+    runtime: docker
+    plan: starter          # free plan works too, but sleeps when idle and has only 512 MB RAM
+    healthCheckPath: /api/health
+    autoDeploy: true
+    envVars:
+      - key: SECRET_KEY
+        generateValue: true
+      - key: MAX_CONCURRENT_DOWNLOADS
+        value: "2"
+      - key: FILE_TTL_MINUTES
+        value: "30"
+      - key: MAX_FILESIZE_MB
+        value: "1024"
+      - key: YTDLP_AUTO_UPDATE
+        value: "true"

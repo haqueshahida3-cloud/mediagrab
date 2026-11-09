@@ -1,0 +1,22 @@
+services:
+  mediagrab:
+    build: .
+    image: mediagrab:latest
+    container_name: mediagrab
+    ports:
+      - "8000:8000"
+    environment:
+      # SECRET_KEY: "change-me-to-a-long-random-string"
+      FILE_TTL_MINUTES: "30"
+      MAX_CONCURRENT_DOWNLOADS: "3"
+      MAX_FILESIZE_MB: "2048"
+      MAX_DURATION_MINUTES: "240"
+      YTDLP_AUTO_UPDATE: "true"
+      # PROXY: "http://user:pass@host:port"
+    volumes:
+      - ./cookies:/app/cookies:ro      # optional: youtube.txt, instagram.txt, facebook.txt, ...
+      - mediagrab-data:/data
+    restart: unless-stopped
+
+volumes:
+  mediagrab-data:
