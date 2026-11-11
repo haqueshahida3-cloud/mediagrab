@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="{{ lang }}" data-theme="dark" data-bg="aurora">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>{{ title }}</title>
+  <meta name="description" content="{{ description }}">
+  <link rel="canonical" href="{{ canonical }}">
+  <link rel="alternate" hreflang="en" href="{{ alt_en }}">
+  <link rel="alternate" hreflang="bn" href="{{ alt_bn }}">
+  <link rel="alternate" hreflang="x-default" href="{{ alt_en }}">
+  {% block robots %}<meta name="robots" content="index,follow,max-image-preview:large">{% endblock %}
+  <meta name="theme-color" content="#0b0a14">
+  <meta name="color-scheme" content="dark light">
+  <meta name="application-name" content="{{ app_name }}">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="{{ app_name }}">
+  <meta property="og:type" content="website">
+  <meta property="og:site_name" content="{{ app_name }}">
+  <meta property="og:title" content="{{ title }}">
+  <meta property="og:description" content="{{ description }}">
+  <meta property="og:url" content="{{ canonical }}">
+  <meta property="og:image" content="{{ base }}/static/icons/og-image.png">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:locale" content="{{ 'bn_BD' if lang == 'bn' else 'en_US' }}">
+  <meta property="og:locale:alternate" content="{{ 'en_US' if lang == 'bn' else 'bn_BD' }}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{ title }}">
+  <meta name="twitter:description" content="{{ description }}">
+  <meta name="twitter:image" content="{{ base }}/static/icons/og-image.png">
+  <link rel="manifest" href="/manifest.webmanifest">
+  <link rel="icon" href="/static/icons/favicon.svg" type="image/svg+xml">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
+  <link rel="preload" href="/static/fonts/inter-latin-400-800.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
+  <script src="/static/js/boot.js?v={{ version }}"></script>
+  <script type="application/ld+json">{{ ldjson({"@context": "https://schema.org", "@type": "Organization", "name": app_name, "url": base + "/", "logo": base + "/static/icons/icon-512.png"}) }}</script>
+  {% block jsonld %}{% endblock %}
+  {% block head %}{% endblock %}
+</head>
+<body class="page-{{ key }}" data-page="{{ key }}" data-version="{{ version }}">
+  <a class="skip-link" href="#main">{{ t.skip }}</a>
+  <div class="bg-fx" aria-hidden="true"><div class="bg-image" id="bgImage"></div><span class="blob b1"></span><span class="blob b2"></span><span class="blob b3"></span><div class="grid-overlay"></div></div>
+  {% include "_nav.html" %}
+  <main id="main">{% block main %}{% endblock %}</main>
+  {% include "_footer.html" %}
+  {% block overlays %}{% endblock %}
+  <div id="modal" class="modal hidden" role="dialog" aria-modal="true"></div>
+  <div id="toasts" class="toasts" aria-live="polite"></div>
+  {% block scripts %}<script type="module" src="/static/js/page.js?v={{ version }}"></script>{% endblock %}
+</body>
+</html>

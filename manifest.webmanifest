@@ -1,23 +1,32 @@
 {
-  "name": "MediaGrab — Video Downloader",
+  "name": "MediaGrab — Video, Photo & MP3 Downloader",
   "short_name": "MediaGrab",
-  "description": "Download YouTube, Facebook, Instagram, X & TikTok videos in HD/4K or MP3.",
+  "description": "Download videos in genuine HD, 4K or 8K, photos and carousels in original quality, or MP3 — YouTube, Facebook, Instagram, X & TikTok.",
   "id": "/",
   "start_url": "/?source=pwa",
   "scope": "/",
   "display": "standalone",
+  "display_override": ["window-controls-overlay", "standalone"],
+  "orientation": "any",
   "background_color": "#07060d",
   "theme_color": "#0b0a14",
-  "categories": ["utilities", "entertainment", "productivity"],
+  "lang": "en",
+  "dir": "ltr",
+  "categories": ["utilities", "entertainment", "productivity", "photo"],
   "icons": [
     { "src": "/static/icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "/static/icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "/static/icons/maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" },
     { "src": "/static/icons/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
   ],
+  "shortcuts": [
+    { "name": "Downloads", "short_name": "Downloads", "url": "/?open=downloads", "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Media Tools", "short_name": "Tools", "url": "/tools", "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }] }
+  ],
   "share_target": {
     "action": "/",
     "method": "GET",
     "params": { "title": "title", "text": "text", "url": "url" }
-  }
+  },
+  "launch_handler": { "client_mode": ["navigate-existing", "auto"] }
 }

@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% block main %}
+{{ m.page_hero("API Documentation", "MediaGrab-এর REST API — ডেভেলপারদের জন্য (ইংরেজিতে)।" if lang == "bn" else "A small, predictable REST API for detection, downloads, photos and media tools.") }}
+<section class="container page-body"><div class="prose" style="max-width:900px">
+  <p class="lead">Base URL: <code>{{ base }}</code> · JSON in, JSON out · interactive reference: <a href="/api/docs">Swagger UI</a></p>
+  <h2>Endpoints</h2>
+  <table><thead><tr><th>Method &amp; path</th><th>Purpose</th></tr></thead><tbody>
+    <tr><td><span class="endpoint"><span class="method post">POST</span>/api/info</span></td><td>Detect media type and list genuine options. Body <code>{"url", "playlist"?}</code>. Returns <code>type</code> = <code>video</code> | <code>playlist</code> | <code>gallery</code> and <code>media_type</code> = video, audio, photo, carousel, album, mixed, playlist.</td></tr>
+    <tr><td><span class="endpoint"><span class="method post">POST</span>/api/formats</span></td><td>Every raw format of a video (resolution, codecs, bitrates, size, protocol).</td></tr>
+    <tr><td><span class="endpoint"><span class="method post">POST</span>/api/download</span></td><td>Start a job. <code>kind</code> = <code>video</code> (quality = short side, e.g. <code>2160</code>, or <code>best</code>), <code>audio</code> (quality = <code>mp3-320</code>, <code>m4a</code>, <code>opus</code>, <code>flac</code>, <code>wav</code>…), or <code>gallery</code> (<code>items</code>: 1-based indexes, empty = all → ZIP).</td></tr>
+    <tr><td><span class="endpoint"><span class="method get">GET</span>/api/jobs/{id}</span> · <span class="endpoint"><span class="method get">GET</span>/api/jobs?ids=a,b</span></td><td>Job status, progress, speed, ETA, output <code>media</code> (verified resolution/codecs) and <code>file_url</code>.</td></tr>
+    <tr><td><span class="endpoint"><span class="method post">POST</span>/api/jobs/{id}/pause|resume|retry|cancel</span></td><td>Download manager actions. Paused jobs keep partial data; retry restarts failed or cancelled jobs.</td></tr>
+    <tr><td><span class="endpoint"><span class="method delete">DELETE</span>/api/jobs/{id}</span></td><td>Cancel and remove a job and its file.</td></tr>
+    <tr><td><span class="endpoint"><span class="method get">GET</span>/api/jobs/{id}/file</span></td><td>Download the finished file (supports HTTP Range).</td></tr>
+    <tr><td><span class="endpoint"><span class="method post">POST</span>/api/subtitles</span></td><td>Subtitles as SRT or VTT.</td></tr>
+    <tr><td><span class="endpoint"><span class="method post">POST</span>/api/tools/upload</span></td><td>Raw-body upload (header <code>X-Filename</code>), max {{ settings.max_upload_mb }} MB → <code>upload_id</code>.</td></tr>
+    <tr><td><span class="endpoint"><span class="method post">POST</span>/api/tools/probe</span> · <span class="endpoint"><span class="method post">POST</span>/api/tools/convert</span></td><td>ffprobe metadata of an upload · convert it to <code>mp3-320/256/192/128</code>, <code>m4a</code>, <code>wav</code>, <code>flac</code>, <code>opus</code> or <code>original</code> (returns a job).</td></tr>
+    <tr><td><span class="endpoint"><span class="method get">GET</span>/api/health</span> · <span class="endpoint"><span class="method get">GET</span>/api/config</span></td><td>Service health and public limits.</td></tr>
+  </tbody></table>
+  <h2>Example: genuine 4K video</h2>
+<pre><code>curl -s -X POST {{ base }}/api/info -H 'content-type: application/json' \
+  -d '{"url": "https://www.youtube.com/watch?v=aqz-KE-bpKQ"}' | jq '.video[] | {id, label, original}'
+
+curl -s -X POST {{ base }}/api/download -H 'content-type: application/json' \
+  -d '{"url": "https://www.youtube.com/watch?v=aqz-KE-bpKQ", "kind": "video", "quality": "2160"}'
+# → {"id": "3f2c…", "status": "queued", …}
+
+curl -s {{ base }}/api/jobs/3f2c… | jq '{status, progress, media}'
+# when status == "finished": media = {"width": 3840, "height": 2160, "vcodec": "VP9", …}
+curl -L -o video.mp4 {{ base }}/api/jobs/3f2c…/file</code></pre>
+  <p>If the requested quality isn't available from the source, the job fails with <code>error_code: "quality_unavailable"</code> before anything is downloaded — MediaGrab never silently downgrades or upscales.</p>
+  <h2>Example: all photos of a post as ZIP</h2>
+<pre><code>curl -s -X POST {{ base }}/api/info -H 'content-type: application/json' \
+  -d '{"url": "https://www.instagram.com/p/BoHk1haB5tM/"}' | jq '{media_type, count, items: [.items[] | {index, type, label}]}'
+
+curl -s -X POST {{ base }}/api/download -H 'content-type: application/json' \
+  -d '{"url": "https://www.instagram.com/p/BoHk1haB5tM/", "kind": "gallery", "items": []}'</code></pre>
+  <h2>Example: convert your own file</h2>
+<pre><code>curl -s -X POST {{ base }}/api/tools/upload -H 'X-Filename: clip.mp4' --data-binary @clip.mp4
+# → {"upload_id": "…24 hex…", …}
+curl -s -X POST {{ base }}/api/tools/convert -H 'content-type: application/json' \
+  -d '{"upload_id": "…", "target": "mp3-320"}'</code></pre>
+  <h2>Errors</h2>
+  <p>Errors are JSON: <code>{"error": "human readable message", "code": "machine_code"}</code>. Common codes: <code>invalid_url</code>, <code>unsupported</code>, <code>no_video</code>, <code>login_required</code>, <code>private</code>, <code>quality_unavailable</code>, <code>bot_check</code>, <code>yt_blocked</code>, <code>rate_limited</code>, <code>too_large</code>, <code>ffmpeg_failed</code>, <code>incomplete</code>.</p>
+  <h2>Limits</h2>
+  <ul><li>{{ settings.rate_limit_info }} detection requests and {{ settings.rate_limit_download }} downloads per minute per IP (HTTP 429 with <code>Retry-After</code>).</li>
+    <li>Max file size {{ settings.max_filesize_mb }} MB · max video length {{ settings.max_duration_minutes or "unlimited" }} minutes · files expire after {{ settings.file_ttl_minutes }} minutes.</li>
+    <li>Please be gentle: cache results and respect platform terms and copyright.</li></ul>
+</div></section>
+{% endblock %}

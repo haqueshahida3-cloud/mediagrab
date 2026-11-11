@@ -1,0 +1,39 @@
+{% set links = [("home", "/", t.nav_home, "nav.downloader"), ("tools", "/tools", t.nav_tools, "nav.tools"), ("platforms", "/platforms", t.nav_platforms, "nav.platforms"), ("how-to-use", "/how-to-use", t.nav_how, "nav.howto"), ("faq", "/faq", t.nav_faq, "nav.faq")] %}
+{% set more = [("about", "/about", t.about, "nav.about"), ("contact", "/contact", t.contact, "nav.contact"), ("api-docs", "/api-docs", t.api, "nav.api"), ("privacy", "/privacy", t.privacy, "nav.privacy"), ("terms", "/terms", t.terms, "nav.terms"), ("dmca", "/dmca", t.dmca, "nav.dmca")] %}
+<header class="nav glass">
+  <div class="container nav-inner">
+    <a class="logo" href="/" aria-label="{{ app_name }} — home">
+      <span class="logo-mark"><i data-icon="logo"></i></span>
+      <span class="logo-text">Media<b>Grab</b></span>
+    </a>
+    <nav class="nav-links" aria-label="Main">
+      {% for k, href, label, i18n in links %}<a href="{{ href }}"{% if key == k %} class="active" aria-current="page"{% endif %} data-i18n="{{ i18n }}">{{ label }}</a>{% endfor %}
+      <details class="nav-more">
+        <summary class="nav-more-btn" data-i18n="nav.more">{{ t.nav_more }}</summary>
+        <div class="menu-pop">
+          {% for k, href, label, i18n in more %}<a href="{{ href }}"{% if key == k %} aria-current="page"{% endif %} data-i18n="{{ i18n }}">{{ label }}</a>{% endfor %}
+        </div>
+      </details>
+    </nav>
+    <div class="nav-actions">
+      <button id="installBtn" class="btn btn-ghost btn-sm hidden" type="button"><i data-icon="smartphone"></i><span class="hide-sm" data-i18n="nav.install">Install app</span></button>
+      <button id="langBtn" class="icon-btn lang-btn" type="button" aria-label="Change language / ভাষা পরিবর্তন" data-lang-target="{{ 'en' if lang == 'bn' else 'bn' }}"><i data-icon="globe"></i><span id="langLabel">{{ t.lang }}</span></button>
+      <div class="nav-more" id="themeWrap">
+        <button id="themeBtn" class="icon-btn" type="button" aria-label="Theme" aria-haspopup="true" aria-expanded="false"><i data-icon="palette" id="themeIcon"></i></button>
+        <div class="menu-pop theme-pop hidden" id="themeMenu" role="menu"></div>
+      </div>
+      {% if key == "home" %}<button id="queueBtn" class="icon-btn queue-btn" type="button" aria-label="Downloads"><i data-icon="download"></i><span class="badge" id="queueBadge">0</span></button>{% endif %}
+      <button id="menuBtn" class="icon-btn menu-btn" type="button" aria-label="{{ t.menu }}" aria-controls="mobileMenu" aria-expanded="false"><i data-icon="menu"></i></button>
+    </div>
+  </div>
+</header>
+<div class="mobile-menu" id="mobileMenu" aria-hidden="true">
+  <div class="mm-backdrop" data-close-menu></div>
+  <nav class="mm-sheet" aria-label="Mobile">
+    <div class="mm-head"><a class="logo" href="/"><span class="logo-mark"><i data-icon="logo"></i></span><span class="logo-text">Media<b>Grab</b></span></a>
+      <button class="icon-btn" type="button" data-close-menu aria-label="Close"><i data-icon="x"></i></button></div>
+    {% for k, href, label, i18n in links %}<a href="{{ href }}"{% if key == k %} class="active"{% endif %}><i data-icon="{{ {'home': 'download', 'tools': 'tool', 'platforms': 'grid', 'how-to-use': 'list', 'faq': 'help'}[k] }}"></i><span data-i18n="{{ i18n }}">{{ label }}</span></a>{% endfor %}
+    <div class="mm-group" data-i18n="nav.more">{{ t.nav_more }}</div>
+    {% for k, href, label, i18n in more %}<a href="{{ href }}"{% if key == k %} class="active"{% endif %}><span data-i18n="{{ i18n }}">{{ label }}</span></a>{% endfor %}
+  </nav>
+</div>

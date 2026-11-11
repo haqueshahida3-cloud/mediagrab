@@ -1,0 +1,65 @@
+{% extends "base.html" %}
+{% set bn = lang == "bn" %}
+{% block jsonld %}
+<script type="application/ld+json">{{ ldjson({
+  "@context": "https://schema.org", "@type": "WebApplication", "name": app_name + " Media Tools", "url": base + "/tools",
+  "applicationCategory": "MultimediaApplication", "operatingSystem": "Any (web browser)",
+  "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
+  "featureList": ["Video to MP3, WAV, M4A, FLAC, Opus", "Audio extraction", "Video thumbnail and frame extraction",
+                  "Image downloader", "JPG / PNG / WebP image converter", "Video, audio and image metadata viewer"]
+}) }}</script>
+{% endblock %}
+{% block main %}
+<section class="container page-hero">
+  <div class="crumbs"><a href="/">{{ t.nav_home }}</a><span>/</span><span>{{ t.nav_tools }}</span></div>
+  <h1><span class="grad">{{ t.nav_tools }}</span></h1>
+  <p data-i18n="tl.sub">{{ "মিডিয়া রূপান্তর, এক্সট্র্যাক্ট ও বিশ্লেষণ করুন। ছবিগুলো আপনার ডিভাইসেই প্রসেস হয়।" if bn else "Convert, extract and inspect media. Images are processed right on your device." }}</p>
+</section>
+
+<section class="container page-body" style="padding-top:8px">
+  <div class="tools-tabs" role="tablist">
+    <button type="button" role="tab" data-tool="audio"><i data-icon="music"></i><span data-i18n="tl.audio">{{ "অডিও এক্সট্র্যাক্টর" if bn else "Audio extractor" }}</span></button>
+    <button type="button" role="tab" data-tool="image"><i data-icon="convert"></i><span data-i18n="tl.image">{{ "ছবি কনভার্টার" if bn else "Image converter" }}</span></button>
+    <button type="button" role="tab" data-tool="frame"><i data-icon="camera"></i><span data-i18n="tl.frame">{{ "থাম্বনেইল ও ফ্রেম" if bn else "Thumbnails & frames" }}</span></button>
+    <button type="button" role="tab" data-tool="photos"><i data-icon="images"></i><span data-i18n="tl.photos">{{ "ছবি ডাউনলোডার" if bn else "Image downloader" }}</span></button>
+    <button type="button" role="tab" data-tool="meta"><i data-icon="info"></i><span data-i18n="tl.meta">{{ "মেটাডেটা ভিউয়ার" if bn else "Metadata viewer" }}</span></button>
+  </div>
+
+  <div class="tool-panel" data-panel-tool="audio">
+    <div class="card tool-card">
+      <h2><i data-icon="music"></i><span data-i18n="tl.audio">{{ "অডিও এক্সট্র্যাক্টর" if bn else "Audio extractor" }}</span></h2>
+      <p data-i18n="tl.audioD">{{ "ভিডিওকে MP3, M4A, WAV, FLAC বা Opus-এ রূপান্তর করুন — লিংক থেকে বা ডিভাইসের ফাইল থেকে।" if bn else "Turn a video into MP3, M4A, WAV, FLAC or Opus — from a link or a file on your device." }}</p>
+      <div class="tool-ui" id="audioUi"></div>
+    </div>
+  </div>
+  <div class="tool-panel hidden" data-panel-tool="image">
+    <div class="card tool-card">
+      <h2><i data-icon="convert"></i><span data-i18n="tl.image">{{ "ছবি কনভার্টার" if bn else "Image converter" }}</span></h2>
+      <p data-i18n="tl.imageD">{{ "ব্রাউজারেই JPG ⇄ PNG ⇄ WebP রূপান্তর, রিসাইজ ও কমপ্রেস করুন। কিছুই আপলোড হয় না।" if bn else "Convert JPG ⇄ PNG ⇄ WebP, resize and compress in your browser. Nothing is uploaded." }}</p>
+      <div class="tool-ui" id="imageUi"></div>
+    </div>
+  </div>
+  <div class="tool-panel hidden" data-panel-tool="frame">
+    <div class="card tool-card">
+      <h2><i data-icon="camera"></i><span data-i18n="tl.frame">{{ "থাম্বনেইল ও ফ্রেম" if bn else "Thumbnails & frames" }}</span></h2>
+      <p data-i18n="tl.frameD">{{ "অনলাইন ভিডিওর সব সাইজের থাম্বনেইল নিন, অথবা নিজের ভিডিওর যেকোনো ফ্রেম ক্যাপচার করুন।" if bn else "Get every thumbnail size of an online video, or capture any frame of your own video." }}</p>
+      <div class="tool-ui" id="frameUi"></div>
+    </div>
+  </div>
+  <div class="tool-panel hidden" data-panel-tool="photos">
+    <div class="card tool-card">
+      <h2><i data-icon="images"></i><span data-i18n="tl.photos">{{ "ছবি ডাউনলোডার" if bn else "Image downloader" }}</span></h2>
+      <p data-i18n="tl.photosD">{{ "Instagram, TikTok ফটো মোড, X ও Facebook থেকে ছবি, ক্যারোসেল ও অ্যালবাম অরিজিনাল কোয়ালিটিতে ডাউনলোড করুন।" if bn else "Download photos, carousels and albums from Instagram, TikTok photo mode, X and Facebook in original quality." }}</p>
+      <div class="tool-ui" id="photosUi"></div>
+    </div>
+  </div>
+  <div class="tool-panel hidden" data-panel-tool="meta">
+    <div class="card tool-card">
+      <h2><i data-icon="info"></i><span data-i18n="tl.meta">{{ "মেটাডেটা ভিউয়ার" if bn else "Metadata viewer" }}</span></h2>
+      <p data-i18n="tl.metaD">{{ "রেজোলিউশন, কোডেক, বিটরেট, ফ্রেম রেট, ফাইল সাইজ, ট্যাগ ও ক্যামেরার EXIF তথ্য দেখুন।" if bn else "See resolution, codecs, bitrate, frame rate, file size, tags and camera EXIF data." }}</p>
+      <div class="tool-ui" id="metaUi"></div>
+    </div>
+  </div>
+</section>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/js/tools.js?v={{ version }}"></script>{% endblock %}

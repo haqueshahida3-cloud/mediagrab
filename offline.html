@@ -1,0 +1,10 @@
+{% extends "base.html" %}
+{% block robots %}<meta name="robots" content="noindex">{% endblock %}
+{% block main %}
+<section class="container page-hero" style="padding:90px 0 120px">
+  <div class="hero-pill"><span class="dot"></span><span>{{ "অফলাইন" if lang == "bn" else "Offline" }}</span></div>
+  <h1><span class="grad">{{ "আপনি অফলাইনে আছেন" if lang == "bn" else "You're offline" }}</span></h1>
+  <p>{{ "ইন্টারনেট সংযোগ ফিরে এলে আবার চেষ্টা করুন। ডাউনলোডের জন্য সংযোগ প্রয়োজন।" if lang == "bn" else "Downloads need an internet connection. Reconnect and try again — your settings and history are saved on this device." }}</p>
+  <p style="margin-top:22px"><a class="btn btn-primary" href="/"><i data-icon="refresh"></i><span>{{ "আবার চেষ্টা করুন" if lang == "bn" else "Try again" }}</span></a></p>
+</section>
+{% endblock %}

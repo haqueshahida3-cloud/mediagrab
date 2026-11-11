@@ -1,0 +1,13 @@
+{% macro page_hero(title, sub="", eyebrow="") %}
+<section class="container page-hero">
+  <div class="crumbs"><a href="/">{{ t.nav_home }}</a><span>/</span><span>{{ title }}</span></div>
+  {% if eyebrow %}<div class="hero-pill" style="margin-top:14px"><span class="dot"></span><span>{{ eyebrow }}</span></div>{% endif %}
+  <h1><span class="grad">{{ title }}</span></h1>
+  {% if sub %}<p>{{ sub }}</p>{% endif %}
+</section>
+{% endmacro %}
+{% macro cta() %}
+<div class="cta-band"><b>{{ "লিংক পেস্ট করুন, বাকিটা MediaGrab করবে।" if lang == "bn" else "Paste a link — MediaGrab does the rest." }}</b>
+  <a class="btn btn-primary" href="/"><i data-icon="download"></i><span>{{ t.home_cta }}</span></a></div>
+{% endmacro %}
+{% macro updated() %}<p class="meta">{{ t.updated }}: {{ build_date }}</p>{% endmacro %}

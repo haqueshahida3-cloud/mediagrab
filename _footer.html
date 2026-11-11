@@ -1,0 +1,28 @@
+<footer class="footer">
+  <div class="container">
+    <div class="footer-cols">
+      <div>
+        <a class="logo" href="/"><span class="logo-mark"><i data-icon="logo"></i></span><span class="logo-text">Media<b>Grab</b></span></a>
+        <p class="disclaimer" data-i18n="footer.disclaimer">{{ t.disclaimer }}</p>
+      </div>
+      <div><h4 data-i18n="footer.product">{{ t.product }}</h4><ul>
+        <li><a href="/" data-i18n="nav.downloader">{{ t.nav_home }}</a></li>
+        <li><a href="/tools" data-i18n="nav.tools">{{ t.nav_tools }}</a></li>
+        <li><a href="/platforms" data-i18n="nav.platforms">{{ t.nav_platforms }}</a></li>
+        <li><a href="/how-to-use" data-i18n="nav.howto">{{ t.nav_how }}</a></li>
+        <li><a href="/api-docs" data-i18n="nav.api">{{ t.api }}</a></li></ul></div>
+      <div><h4 data-i18n="footer.company">{{ t.company }}</h4><ul>
+        <li><a href="/about" data-i18n="nav.about">{{ t.about }}</a></li>
+        <li><a href="/faq" data-i18n="nav.faq">{{ t.nav_faq }}</a></li>
+        <li><a href="/contact" data-i18n="nav.contact">{{ t.contact }}</a></li></ul></div>
+      <div><h4 data-i18n="footer.legal">{{ t.legal }}</h4><ul>
+        <li><a href="/privacy" data-i18n="nav.privacy">{{ t.privacy }}</a></li>
+        <li><a href="/terms" data-i18n="nav.terms">{{ t.terms }}</a></li>
+        <li><a href="/dmca" data-i18n="nav.dmca">{{ t.dmca }}</a></li></ul></div>
+    </div>
+    <div class="footer-bottom">
+      <span>© {{ year }} {{ app_name }}. <span data-i18n="footer.rights">{{ t.rights }}</span></span>
+      <span id="footerVersion">v{{ version }}</span>
+    </div>
+  </div>
+</footer>

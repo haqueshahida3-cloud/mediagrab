@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% block main %}
+{% if lang == "bn" %}
+{{ m.page_hero("ব্যবহারের শর্তাবলি", "MediaGrab ব্যবহার করলে আপনি এই শর্তগুলোতে সম্মত হচ্ছেন।") }}
+<section class="container page-body"><div class="prose">
+  {{ m.updated() }}
+  <h2>১. সার্ভিস</h2><p>MediaGrab পাবলিক অনলাইন কনটেন্টের ব্যক্তিগত কপি সংরক্ষণের একটি টুল। সার্ভিসটি “যেমন আছে” ভিত্তিতে দেওয়া হয়, কোনো ধরনের গ্যারান্টি ছাড়া।</p>
+  <h2>২. বৈধ ব্যবহার</h2><ul>
+    <li>শুধু নিজের কনটেন্ট, অনুমতিপ্রাপ্ত কনটেন্ট বা আইনত অনুমোদিত ব্যবহারের (যেমন ফেয়ার ইউজ) জন্য ডাউনলোড করুন।</li>
+    <li>কপিরাইট, মেধাস্বত্ব ও প্রতিটি প্ল্যাটফর্মের নিয়ম মেনে চলা আপনার দায়িত্ব।</li>
+    <li>প্রাইভেট, DRM-সুরক্ষিত বা পেইড কনটেন্ট পাওয়ার চেষ্টা করবেন না।</li></ul>
+  <h2>৩. নিষিদ্ধ</h2><ul>
+    <li>সার্ভিসের অপব্যবহার, অতিরিক্ত অটোমেটেড অনুরোধ বা রেট লিমিট এড়ানোর চেষ্টা।</li>
+    <li>অন্য সিস্টেমে আক্রমণ বা ক্ষতিকর কাজে সার্ভিস ব্যবহার।</li>
+    <li>ডাউনলোড করা কনটেন্ট অনুমতি ছাড়া পুনঃপ্রকাশ বা বাণিজ্যিকভাবে ব্যবহার।</li></ul>
+  <h2>৪. সীমা</h2><p>ফাইলের আকার, ভিডিওর দৈর্ঘ্য ও একসাথে ডাউনলোডের সংখ্যায় সীমা থাকতে পারে। ফাইলগুলো অল্প সময় পরে মুছে যায়।</p>
+  <h2>৫. দায়মুক্তি</h2><p>MediaGrab কোনো ডাউনলোড করা কনটেন্টের মালিক নয় এবং ব্যবহারকারীর কাজের জন্য দায়ী নয়। আইন অনুযায়ী সর্বোচ্চ সীমা পর্যন্ত কোনো ক্ষতির দায় আমরা নিই না।</p>
+  <h2>৬. পরিবর্তন</h2><p>এই শর্তাবলি সময়ে সময়ে হালনাগাদ হতে পারে; উপরের তারিখটি সর্বশেষ পরিবর্তন নির্দেশ করে।</p>
+</div></section>
+{% else %}
+{{ m.page_hero("Terms of Service", "By using MediaGrab you agree to these terms.") }}
+<section class="container page-body"><div class="prose">
+  {{ m.updated() }}
+  <h2>1. The service</h2><p>MediaGrab is a tool for saving personal copies of publicly available online content. It is provided “as is”, without warranties of any kind.</p>
+  <h2>2. Acceptable use</h2><ul>
+    <li>Only download content you own, have permission to use, or may use under applicable law (e.g. fair use).</li>
+    <li>You are responsible for complying with copyright, intellectual-property law and each platform's terms.</li>
+    <li>Do not attempt to access private, DRM-protected or paid content.</li></ul>
+  <h2>3. Prohibited</h2><ul>
+    <li>Abusing the service, sending excessive automated requests or trying to evade rate limits.</li>
+    <li>Using the service to attack other systems or for any unlawful purpose.</li>
+    <li>Re-publishing or commercially exploiting downloaded content without the rights holder's permission.</li></ul>
+  <h2>4. Limits</h2><p>File sizes, video length and the number of parallel downloads may be limited. Files are deleted after a short time.</p>
+  <h2>5. Disclaimer</h2><p>MediaGrab does not own any downloaded content and is not responsible for how users use it. To the maximum extent permitted by law, we are not liable for any damages arising from use of the service.</p>
+  <h2>6. Changes</h2><p>These terms may be updated from time to time; the date above shows the latest revision.</p>
+</div></section>
+{% endif %}
+{% endblock %}

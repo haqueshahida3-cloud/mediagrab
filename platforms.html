@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% set bn = lang == "bn" %}
+{% set Y = "✓" %}
+{% block main %}
+{{ m.page_hero("সমর্থিত প্ল্যাটফর্ম" if bn else "Supported platforms", "প্রতিটি প্ল্যাটফর্ম থেকে ঠিক কী কী ডাউনলোড করা যায়।" if bn else "Exactly what you can download from each platform — no exaggeration.") }}
+<section class="container page-body"><div class="prose" style="max-width:980px">
+  <div class="table-wrap"><table class="pf-table">
+    <thead><tr><th>{{ "প্ল্যাটফর্ম" if bn else "Platform" }}</th><th>{{ "ভিডিও" if bn else "Video" }}</th><th>{{ "ছবি / ক্যারোসেল" if bn else "Photos / carousels" }}</th><th>{{ "অডিও" if bn else "Audio" }}</th><th>{{ "সর্বোচ্চ কোয়ালিটি" if bn else "Max quality" }}</th><th>{{ "নোট" if bn else "Notes" }}</th></tr></thead>
+    <tbody>
+      <tr><td>YouTube</td><td class="yes">{{ Y }} {{ "ভিডিও, শর্টস, প্লেলিস্ট" if bn else "Videos, Shorts, playlists" }}</td><td class="no">{{ "থাম্বনেইল" if bn else "Thumbnails" }}</td><td class="yes">{{ Y }} MP3, M4A, Opus, FLAC, WAV</td><td>{{ "8K (সোর্সে থাকলে)" if bn else "8K (when the video has it)" }}</td><td>{{ "সাবটাইটেল, চ্যাপ্টার, SponsorBlock, ট্রিম" if bn else "Subtitles, chapters, SponsorBlock, trim" }}</td></tr>
+      <tr><td>Instagram</td><td class="yes">{{ Y }} {{ "রিলস, ভিডিও পোস্ট" if bn else "Reels, video posts" }}</td><td class="yes">{{ Y }} {{ "ছবি, ক্যারোসেল (মিশ্রসহ)" if bn else "Photos, carousels (incl. mixed)" }}</td><td class="yes">{{ Y }}</td><td>{{ "অরিজিনাল (সাধারণত 1080p / 1080px)" if bn else "Original (usually 1080p / 1080 px)" }}</td><td>{{ "স্টোরি ও প্রাইভেট অ্যাকাউন্টের জন্য লগইন লাগে" if bn else "Stories & private accounts need login" }}</td></tr>
+      <tr><td>Facebook</td><td class="yes">{{ Y }} {{ "ভিডিও, রিলস, Watch" if bn else "Videos, Reels, Watch" }}</td><td class="yes">{{ Y }} {{ "পাবলিক পোস্ট ও অ্যালবামের ছবি" if bn else "Public post & album photos" }}</td><td class="yes">{{ Y }}</td><td>{{ "ভিডিও 1080p · ছবি 2048px পর্যন্ত" if bn else "Video 1080p · photos up to 2048 px" }}</td><td>{{ "একক ছবির পেজ প্রায়ই লগইন চায় (অ্যাডমিন কুকি যোগ করতে পারেন)" if bn else "Single photo pages often require login (admin can add cookies)" }}</td></tr>
+      <tr><td>X (Twitter)</td><td class="yes">{{ Y }} {{ "ভিডিও, GIF" if bn else "Videos, GIFs" }}</td><td class="yes">{{ Y }} {{ "অরিজিনাল কোয়ালিটির ছবি, মিশ্র পোস্ট" if bn else "Original-quality photos, mixed posts" }}</td><td class="yes">{{ Y }}</td><td>{{ "ভিডিও 1080p · ছবি অরিজিনাল" if bn else "Video 1080p · photos original" }}</td><td>{{ "প্রাপ্তবয়স্ক/প্রাইভেট পোস্টে লগইন লাগে" if bn else "Sensitive/private posts need login" }}</td></tr>
+      <tr><td>TikTok</td><td class="yes">{{ Y }} {{ "ভিডিও" if bn else "Videos" }}</td><td class="yes">{{ Y }} {{ "ফটো মোড (সব ছবি + সাউন্ড)" if bn else "Photo mode (all images + sound)" }}</td><td class="yes">{{ Y }}</td><td>{{ "1080p (সোর্সে থাকলে)" if bn else "1080p (when available)" }}</td><td>{{ "ছোট লিংক (vm.tiktok.com) স্বয়ংক্রিয়ভাবে কাজ করে" if bn else "Short links (vm.tiktok.com) work automatically" }}</td></tr>
+    </tbody></table></div>
+  <div class="callout"><i data-icon="info"></i><div>{{ "এছাড়া Vimeo, Reddit, Dailymotion, SoundCloud, Pinterest, Threads, Twitch, LinkedIn, Bilibili সহ ১০০০+ সাইট সমর্থিত (yt-dlp-এর মাধ্যমে)। যেসব সাইটে ভিডিও নেই সেখানে পেজের প্রিভিউ ছবি দেওয়া হতে পারে — তখন সেটি পরিষ্কারভাবে জানানো হয়।" if bn else "Also supported: Vimeo, Reddit, Dailymotion, SoundCloud, Pinterest, Threads, Twitch, LinkedIn, Bilibili and 1000+ more sites through yt-dlp. For pages without a video we may offer the page's preview image — and we say so clearly." }}</div></div>
+  <h2>{{ "কোয়ালিটি নিয়ে সৎ থাকা" if bn else "About quality" }}</h2>
+  <p>{{ "4K বা 8K তখনই দেখানো হয় যখন মূল ভিডিওতে সত্যিই সেই রেজোলিউশন আছে। আলাদা ভিডিও ও অডিও স্ট্রিম FFmpeg দিয়ে মূল কোয়ালিটিতে জোড়া লাগানো হয় (রি-এনকোড ছাড়া), আর ডাউনলোড শেষে আসল আউটপুট রেজোলিউশন দেখানো হয়।" if bn else "4K and 8K only appear when the original really has that resolution. Separate video and audio streams are merged with FFmpeg without re-encoding (original quality), and the real output resolution is shown when the download finishes." }}</p>
+  <h2>{{ "যা আমরা করি না" if bn else "What we don't do" }}</h2>
+  <ul><li>{{ "প্রাইভেট অ্যাকাউন্ট বা ফলোয়ার-অনলি কনটেন্ট বাইপাস" if bn else "Bypass private accounts or followers-only content" }}</li><li>{{ "DRM-সুরক্ষিত বা পেইড কনটেন্ট (Netflix, Spotify ইত্যাদি)" if bn else "DRM-protected or paid content (Netflix, Spotify, etc.)" }}</li><li>{{ "লাইভ স্ট্রিম শেষ হওয়ার আগে ডাউনলোড" if bn else "Download live streams before they end" }}</li></ul>
+  {{ m.cta() }}
+</div></section>
+{% endblock %}

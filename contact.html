@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% set bn = lang == "bn" %}
+{% block main %}
+{{ m.page_hero("যোগাযোগ" if bn else "Contact", "সাপোর্ট, মতামত, কপিরাইট বা প্রাইভেসি অনুরোধ।" if bn else "Support, feedback, copyright and privacy requests.") }}
+<section class="container page-body"><div class="prose">
+  <div class="info-grid">
+    <div class="info-card"><div class="ic"><i data-icon="mail"></i></div><h3>{{ "ইমেইল" if bn else "Email" }}</h3>
+      {% if contact_email %}<p><a href="mailto:{{ contact_email }}">{{ contact_email }}</a></p>
+      <p style="margin-top:10px"><a class="btn btn-primary btn-sm" href="mailto:{{ contact_email }}?subject=MediaGrab"><i data-icon="mail"></i><span>{{ "ইমেইল লিখুন" if bn else "Write an email" }}</span></a></p>
+      {% else %}<p>{{ "এই সাইটের পরিচালক এখনো যোগাযোগের ঠিকানা প্রকাশ করেননি।" if bn else "The operator of this site hasn't published a contact address yet." }}</p>{% endif %}</div>
+    <div class="info-card"><div class="ic"><i data-icon="help"></i></div><h3>{{ "দ্রুত সাহায্য" if bn else "Quick help" }}</h3><p>{{ "বেশিরভাগ প্রশ্নের উত্তর FAQ ও ব্যবহারবিধি পেজে আছে।" if bn else "Most questions are answered in the FAQ and the How to use guide." }}</p>
+      <p style="margin-top:10px"><a class="chip-btn" href="/faq">FAQ</a> <a class="chip-btn" href="/how-to-use">{{ t.nav_how }}</a></p></div>
+    <div class="info-card"><div class="ic"><i data-icon="shield"></i></div><h3>{{ "কপিরাইট" if bn else "Copyright" }}</h3><p>{{ "কপিরাইট সংক্রান্ত অভিযোগের প্রক্রিয়া DMCA পেজে দেখুন।" if bn else "For copyright concerns, please follow the process on our DMCA page." }}</p>
+      <p style="margin-top:10px"><a class="chip-btn" href="/dmca">{{ t.dmca }}</a></p></div>
+  </div>
+  <h2>{{ "সমস্যা জানানোর সময়" if bn else "When reporting a problem" }}</h2>
+  <ul>
+    <li>{{ "যে লিংকটি কাজ করছে না (প্রাইভেট লিংক নয়)" if bn else "The link that doesn't work (please no private links)" }}</li>
+    <li>{{ "স্ক্রিনে দেখানো এরর মেসেজ" if bn else "The error message shown on screen" }}</li>
+    <li>{{ "ডিভাইস ও ব্রাউজার (যেমন Android · Chrome)" if bn else "Your device and browser (e.g. Android · Chrome)" }}</li>
+  </ul>
+</div></section>
+{% endblock %}

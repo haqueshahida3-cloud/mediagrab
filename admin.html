@@ -1,0 +1,6 @@
+{% extends "base.html" %}
+{% block robots %}<meta name="robots" content="noindex, nofollow">{% endblock %}
+{% block main %}
+<section class="container admin-wrap"><div id="adminApp" aria-live="polite"><div class="sk-status"><span class="spinner"></span><span>Loading…</span></div></div></section>
+{% endblock %}
+{% block scripts %}<script type="module" src="/static/js/admin.js?v={{ version }}"></script>{% endblock %}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% if lang == "bn" %}
+{% set faqs = [
+  ("MediaGrab কি ফ্রি?", "হ্যাঁ, সম্পূর্ণ ফ্রি। কোনো অ্যাকাউন্ট বা সাইন-আপ লাগে না।"),
+  ("কোন কোন প্ল্যাটফর্ম সমর্থিত?", "YouTube, Facebook, Instagram, X (Twitter) ও TikTok — এছাড়া yt-dlp-এর মাধ্যমে ১০০০+ সাইট। বিস্তারিত সমর্থিত প্ল্যাটফর্ম পেজে দেখুন।"),
+  ("ছবি, ক্যারোসেল ও অ্যালবাম ডাউনলোড করা যায়?", "হ্যাঁ। Instagram পোস্ট ও ক্যারোসেল, TikTok ফটো মোড, X-এর ছবি এবং Facebook-এর পাবলিক পোস্ট ও অ্যালবামের ছবি অরিজিনাল কোয়ালিটিতে পাওয়া যায় — একটি করে বা ZIP হিসেবে।"),
+  ("4K বা 8K কেন সব ভিডিওতে দেখায় না?", "কারণ আমরা শুধু সেই কোয়ালিটিই দেখাই যা মূল ভিডিওতে সত্যিই আছে। ভিডিওতে 4K না থাকলে আমরা আপস্কেল করে নকল 4K বানাই না। অনেক সময় YouTube সার্ভারকে সাময়িকভাবে সব কোয়ালিটি দেয় না — তখন সেটি জানানো হয়, এক মিনিট পর আবার চেষ্টা করুন।"),
+  ("ডাউনলোড পজ ও রিজিউম করা যায়?", "হ্যাঁ। ডাউনলোড প্যানেল থেকে পজ করুন; ডাউনলোড হওয়া অংশ রাখা থাকে এবং রিজিউম করলে সেখান থেকেই আবার শুরু হয়।"),
+  ("Facebook-এর কিছু ছবি কেন ‘লগইন লাগবে’ বলে?", "Facebook অনেক একক ছবির পেজ শুধু লগইন করা ব্যবহারকারীদের দেখায়। পাবলিক পোস্ট ও অ্যালবাম লগইন ছাড়াই কাজ করে। সার্ভার অ্যাডমিন চাইলে Facebook কুকি যোগ করতে পারেন।"),
+  ("YouTube ‘not a bot’ বা ‘refusing requests’ এরর দেখাচ্ছে কেন?", "YouTube মাঝে মাঝে ডেটা সেন্টারের সার্ভারকে সীমিত করে। কয়েক মিনিট পর আবার চেষ্টা করুন। সাইটের অ্যাডমিন নতুন YouTube কুকি বা প্রক্সি যোগ করে এটি স্থায়ীভাবে ঠিক করতে পারেন।"),
+  ("ফাইলগুলো কতক্ষণ সার্ভারে থাকে?", "শুধু ডাউনলোড সম্পূর্ণ করার জন্য যতক্ষণ প্রয়োজন — ডিফল্টভাবে ৩০ মিনিট, তারপর স্বয়ংক্রিয়ভাবে মুছে যায়।"),
+  ("আমার ডেটা কি সংরক্ষণ করা হয়?", "না। কোনো অ্যাকাউন্ট বা ট্র্যাকিং নেই। হিস্ট্রি ও সেটিংস শুধু আপনার ব্রাউজারে থাকে। বিস্তারিত প্রাইভেসি পলিসিতে।"),
+  ("ভিডিও থেকে MP3 কীভাবে বানাব?", "লিংক দিয়ে অডিও ট্যাব থেকে MP3 বেছে নিন, অথবা নিজের ফাইলের জন্য মিডিয়া টুলস → অডিও এক্সট্র্যাক্টর ব্যবহার করুন।"),
+  ("ফোনে অ্যাপের মতো ইনস্টল করা যায়?", "হ্যাঁ। Android-এ ব্রাউজার মেনু → Install app, iPhone-এ Share → Add to Home Screen। ইনস্টলের পর অন্য অ্যাপ থেকে সরাসরি MediaGrab-এ শেয়ার করা যায়।"),
+  ("প্রাইভেট ভিডিও বা প্রাইভেট অ্যাকাউন্টের কনটেন্ট?", "না। MediaGrab প্রাইভেট অ্যাকাউন্ট, DRM বা পেওয়াল বাইপাস করে না।"),
+  ("ডাউনলোড করা কনটেন্ট কি ব্যবহার করা বৈধ?", "আপনার নিজের কনটেন্ট বা যেটির অনুমতি আছে সেটি সংরক্ষণ করুন। কপিরাইট ও প্ল্যাটফর্মের নিয়ম মেনে চলা আপনার দায়িত্ব।"),
+] %}
+{% else %}
+{% set faqs = [
+  ("Is MediaGrab free?", "Yes — completely free, with no account or sign-up."),
+  ("Which platforms are supported?", "YouTube, Facebook, Instagram, X (Twitter) and TikTok, plus 1000+ other sites through yt-dlp. See the Supported Platforms page for details."),
+  ("Can I download photos, carousels and albums?", "Yes. Instagram posts and carousels, TikTok photo mode, X photos, and photos from public Facebook posts and albums are available in original quality — one by one or as a ZIP."),
+  ("Why don't I see 4K or 8K for every video?", "Because we only list qualities the original video really has. If a video doesn't exist in 4K, we don't upscale it into fake 4K. Sometimes YouTube temporarily withholds high qualities from our server — the page tells you when that happens; try again a minute later."),
+  ("Can I pause and resume downloads?", "Yes. Pause from the downloads panel; data already downloaded is kept and resuming continues from there."),
+  ("Why do some Facebook photos say “login required”?", "Facebook shows many single-photo pages only to logged-in users. Public posts and albums work without login. The server admin can add Facebook cookies to unlock the rest."),
+  ("Why does YouTube say “not a bot” or “refusing requests”?", "YouTube sometimes limits data-centre servers. Try again in a few minutes. The site admin can fix it permanently by adding fresh YouTube cookies or a proxy."),
+  ("How long are files kept on the server?", "Only as long as needed to finish your download — 30 minutes by default — then they're deleted automatically."),
+  ("Do you store my data?", "No. There are no accounts and no tracking. History and settings stay in your browser. See the Privacy Policy for details."),
+  ("How do I convert a video to MP3?", "Paste the link and choose MP3 in the Audio tab, or use Media Tools → Audio extractor for a file on your device."),
+  ("Can I install MediaGrab like an app?", "Yes. On Android use the browser menu → Install app; on iPhone use Share → Add to Home Screen. After installing you can share links straight to MediaGrab from other apps."),
+  ("Can I download private videos or private accounts?", "No. MediaGrab never bypasses private accounts, DRM or paywalls."),
+  ("Is it legal to use downloaded content?", "Save content you own or have permission to use. You are responsible for respecting copyright and each platform's terms."),
+] %}
+{% endif %}
+{% block jsonld %}
+<script type="application/ld+json">{{ faq_jsonld(faqs) }}</script>
+{% endblock %}
+{% block main %}
+{{ m.page_hero("সাধারণ প্রশ্ন" if lang == "bn" else "Frequently asked questions", "কোয়ালিটি, ছবি, প্রাইভেসি ও সমস্যা সমাধান।" if lang == "bn" else "Quality, photos, privacy and troubleshooting.") }}
+<section class="container page-body"><div class="prose faq faq-page">
+  {% for q, a in faqs %}<details{% if loop.first %} open{% endif %}><summary>{{ q }}</summary><div class="ans">{{ a }}</div></details>{% endfor %}
+  {{ m.cta() }}
+</div></section>
+{% endblock %}

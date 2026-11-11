@@ -1,0 +1,43 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% set bn = lang == "bn" %}
+{% block jsonld %}
+<script type="application/ld+json">{{ ldjson({"@context": "https://schema.org", "@type": "HowTo", "name": title, "description": description,
+  "step": [{"@type": "HowToStep", "position": 1, "name": "Copy the link", "text": "Open the post or video and copy its link (Share → Copy link)."},
+           {"@type": "HowToStep", "position": 2, "name": "Paste it into MediaGrab", "text": "Paste the link on the MediaGrab home page. It detects videos, photos, carousels, albums and playlists."},
+           {"@type": "HowToStep", "position": 3, "name": "Choose and download", "text": "Pick a genuine quality, MP3 or the original photos. Files are verified and saved to your device."}]}) }}</script>
+{% endblock %}
+{% block main %}
+{{ m.page_hero("কীভাবে ব্যবহার করবেন" if bn else "How to use MediaGrab", "৩ ধাপে ভিডিও, ছবি ও MP3 — কম্পিউটার ও মোবাইলে।" if bn else "Videos, photos and MP3 in three steps — on desktop and mobile.") }}
+<section class="container page-body"><div class="prose">
+  <div class="steps" style="margin:0 0 10px">
+    <div class="step"><div class="num">1</div><h3>{{ "লিংক কপি করুন" if bn else "Copy the link" }}</h3><p>{{ "অ্যাপে Share → Copy link চাপুন।" if bn else "In the app tap Share → Copy link." }}</p></div>
+    <div class="step"><div class="num">2</div><h3>{{ "পেস্ট করুন" if bn else "Paste it" }}</h3><p>{{ "MediaGrab-এ পেস্ট করুন — ধরন নিজে থেকে শনাক্ত হবে।" if bn else "Paste into MediaGrab — the media type is detected automatically." }}</p></div>
+    <div class="step"><div class="num">3</div><h3>{{ "বেছে নিন" if bn else "Choose" }}</h3><p>{{ "কোয়ালিটি, MP3 বা ছবি বেছে ডাউনলোড করুন।" if bn else "Pick a quality, MP3 or photos and download." }}</p></div>
+  </div>
+  <h2>{{ "ভিডিও (1080p, 4K, 8K)" if bn else "Videos (1080p, 4K, 8K)" }}</h2>
+  <p>{{ "ভিডিও ট্যাবে সব আসল কোয়ালিটি দেখাবে, সাথে অরিজিনাল রেজোলিউশন (যেমন 3840×2160) ও কোডেক। “Max compatibility” চালু থাকলে যেখানে সম্ভব H.264 নেওয়া হয় — যা সব ফোন ও টিভিতে চলে। 1440p-এর বেশি রেজোলিউশন সাধারণত VP9/AV1 কোডেকে আসে।" if bn else "The Video tab lists every genuine quality with its original resolution (e.g. 3840×2160) and codecs. With “Max compatibility” on, H.264 is preferred where it exists — it plays on every phone and TV. Above 1440p, platforms usually only offer VP9 or AV1." }}</p>
+  <h2>{{ "ছবি, ক্যারোসেল ও অ্যালবাম" if bn else "Photos, carousels and albums" }}</h2>
+  <p>{{ "Instagram পোস্ট, TikTok ফটো মোড, X বা Facebook-এর লিংক দিলে সব ছবি গ্রিডে দেখাবে। একটি করে ডাউনলোড করুন বা সিলেক্ট করে ZIP হিসেবে নিন। ছবিগুলো অরিজিনাল ফরম্যাট ও কোয়ালিটিতে থাকে।" if bn else "Paste an Instagram post, TikTok photo post, X or Facebook link and every photo appears in a grid. Download them one by one, or select several and get a single ZIP. Files keep their original format and quality." }}</p>
+  <h2>{{ "MP3 ও অডিও" if bn else "MP3 and audio" }}</h2>
+  <p>{{ "অডিও ট্যাব থেকে MP3 (320/256/192/128 kbps), M4A, Opus, FLAC বা WAV বেছে নিন। নিজের ফাইল থেকে অডিও বের করতে মিডিয়া টুলস ব্যবহার করুন।" if bn else "Use the Audio tab for MP3 (320/256/192/128 kbps), M4A, Opus, FLAC or WAV. To extract audio from your own file, use Media Tools." }}</p>
+  <h2>{{ "ডাউনলোড ম্যানেজার" if bn else "Download manager" }}</h2>
+  <ul>
+    <li>{{ "অগ্রগতি, MB/s গতি, বাকি সময় ও ফাইল সাইজ দেখুন" if bn else "See progress, speed in MB/s, time left and file size" }}</li>
+    <li>{{ "পজ ও রিজিউম — ডাউনলোড হওয়া অংশ রাখা থাকে" if bn else "Pause and resume — already downloaded data is kept" }}</li>
+    <li>{{ "ব্যর্থ হলে এক ক্লিকে রিট্রাই; একসাথে কয়টি চলবে সেটিংসে ঠিক করুন" if bn else "Retry failed items in one click; choose how many run in parallel in Settings" }}</li>
+    <li>{{ "হিস্ট্রি ও সম্প্রতি ডাউনলোড করা ফাইল শুধু আপনার ডিভাইসে থাকে" if bn else "History and recent downloads stay on your device only" }}</li>
+  </ul>
+  <h2>{{ "মোবাইলে" if bn else "On mobile" }}</h2>
+  <p>{{ "Android-এ ব্রাউজার মেনু থেকে “Install app” চাপলে MediaGrab অ্যাপের মতো ইনস্টল হয়। এরপর YouTube/TikTok/Instagram অ্যাপ থেকে Share → MediaGrab দিলেই লিংক চলে আসবে। iPhone-এ Safari-র Share → Add to Home Screen।" if bn else "On Android, choose “Install app” in the browser menu. Afterwards you can share straight from the YouTube, TikTok or Instagram app: Share → MediaGrab. On iPhone use Safari → Share → Add to Home Screen." }}</p>
+  <h2>{{ "কিবোর্ড শর্টকাট" if bn else "Keyboard shortcuts" }}</h2>
+  <table><tbody>
+    <tr><td><kbd>Ctrl</kbd> + <kbd>V</kbd></td><td>{{ "যেকোনো জায়গায় পেস্ট ও ফেচ" if bn else "Paste & fetch anywhere" }}</td></tr>
+    <tr><td><kbd>/</kbd></td><td>{{ "লিংক বক্সে যান" if bn else "Focus the link box" }}</td></tr>
+    <tr><td><kbd>D</kbd> · <kbd>H</kbd> · <kbd>S</kbd></td><td>{{ "ডাউনলোড · হিস্ট্রি · সেটিংস" if bn else "Downloads · History · Settings" }}</td></tr>
+    <tr><td><kbd>T</kbd> · <kbd>L</kbd></td><td>{{ "থিম · ভাষা পরিবর্তন" if bn else "Cycle theme · switch language" }}</td></tr>
+    <tr><td><kbd>?</kbd></td><td>{{ "সব শর্টকাট" if bn else "All shortcuts" }}</td></tr>
+  </tbody></table>
+  {{ m.cta() }}
+</div></section>
+{% endblock %}

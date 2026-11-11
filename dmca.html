@@ -1,0 +1,26 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% set bn = lang == "bn" %}
+{% block main %}
+{{ m.page_hero("DMCA ও কপিরাইট নীতি" if bn else "DMCA & Copyright Policy", "আমরা কপিরাইটকে সম্মান করি।" if bn else "We respect the rights of creators.") }}
+<section class="container page-body"><div class="prose">
+  {{ m.updated() }}
+  {% if bn %}
+  <h2>MediaGrab কী হোস্ট করে</h2>
+  <p>MediaGrab কোনো কনটেন্ট হোস্ট, ইনডেক্স বা পাবলিশ করে না। ব্যবহারকারীর অনুরোধে পাবলিক কনটেন্টের একটি অস্থায়ী কপি তৈরি হয়, যা {{ settings.file_ttl_minutes }} মিনিটের মধ্যে স্বয়ংক্রিয়ভাবে মুছে যায়। কোনো সার্চযোগ্য লাইব্রেরি বা পাবলিক লিংক নেই।</p>
+  <h2>অভিযোগ জানানো</h2>
+  <p>আপনি যদি কপিরাইট মালিক হন এবং মনে করেন MediaGrab আপনার অধিকার লঙ্ঘনে ব্যবহার হচ্ছে, অনুগ্রহ করে <a href="/contact">যোগাযোগ</a> পেজের ঠিকানায় নিচের তথ্যসহ জানান:</p>
+  <ol><li>আপনার নাম ও যোগাযোগের তথ্য</li><li>কপিরাইটযুক্ত কাজের বিবরণ</li><li>সংশ্লিষ্ট কনটেন্টের লিংক (মূল প্ল্যাটফর্মের)</li><li>সরল বিশ্বাসে অননুমোদিত ব্যবহারের ঘোষণা</li><li>তথ্য সঠিক এবং আপনি মালিক বা মালিকের পক্ষে কাজ করার অনুমতিপ্রাপ্ত — এই ঘোষণা</li><li>আপনার স্বাক্ষর (ইলেকট্রনিক হলেও চলবে)</li></ol>
+  <h2>আমরা যা করি</h2>
+  <p>বৈধ অভিযোগ পেলে আমরা নির্দিষ্ট কনটেন্ট বা সোর্সের প্রক্রিয়াকরণ ব্লক করতে পারি এবং বারবার লঙ্ঘনকারীর অ্যাক্সেস সীমিত করতে পারি। মূল কনটেন্ট সরাতে হলে সংশ্লিষ্ট প্ল্যাটফর্মের (যেমন YouTube) সাথে যোগাযোগ করুন — কারণ কনটেন্টটি সেখানেই হোস্ট করা।</p>
+  {% else %}
+  <h2>What MediaGrab hosts</h2>
+  <p>MediaGrab does not host, index or publish content. At a user's request it creates a temporary copy of publicly available content, which is deleted automatically within {{ settings.file_ttl_minutes }} minutes. There is no searchable library and no public file links.</p>
+  <h2>Reporting infringement</h2>
+  <p>If you are a copyright owner and believe MediaGrab is being used to infringe your rights, please contact us via the <a href="/contact">contact page</a> with:</p>
+  <ol><li>Your name and contact details</li><li>A description of the copyrighted work</li><li>The link(s) to the content on the original platform</li><li>A statement of good-faith belief that the use is unauthorised</li><li>A statement that the information is accurate and that you are the owner or authorised to act for the owner</li><li>Your physical or electronic signature</li></ol>
+  <h2>What we do</h2>
+  <p>On receiving a valid notice we may block processing of the specified content or sources and restrict repeat infringers. To have the original removed, please also contact the platform hosting it (e.g. YouTube), since the content lives there.</p>
+  {% endif %}
+</div></section>
+{% endblock %}

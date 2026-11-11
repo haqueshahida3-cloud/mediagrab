@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% block main %}
+{% if lang == "bn" %}
+{{ m.page_hero("MediaGrab সম্পর্কে", "দ্রুত, নিরাপদ ও সৎ — একটি আধুনিক মিডিয়া ডাউনলোডার।") }}
+<section class="container page-body"><div class="prose">
+  <p class="lead">MediaGrab একটি ফ্রি ওয়েব অ্যাপ, যা দিয়ে YouTube, Facebook, Instagram, X ও TikTok-এর পাবলিক ভিডিও, ছবি ও অডিও সংরক্ষণ করা যায় — কোনো অ্যাকাউন্ট বা অ্যাপ ইনস্টল ছাড়াই।</p>
+  <h2>আমাদের নীতি</h2>
+  <div class="info-grid">
+    <div class="info-card"><div class="ic"><i data-icon="hd"></i></div><h3>সৎ কোয়ালিটি</h3><p>সোর্সে যে রেজোলিউশন আছে শুধু সেটিই দেখানো হয়। কখনো আপস্কেল করে "নকল 4K" দেওয়া হয় না — ডাউনলোডের পর FFmpeg দিয়ে আউটপুট যাচাই করা হয়।</p></div>
+    <div class="info-card"><div class="ic"><i data-icon="lock"></i></div><h3>প্রাইভেসি আগে</h3><p>কোনো অ্যাকাউন্ট নেই, কোনো ট্র্যাকিং নেই। ফাইলগুলো অল্প সময় পরে সার্ভার থেকে নিজে নিজে মুছে যায়। ছবি কনভার্টার আপনার ডিভাইসেই কাজ করে।</p></div>
+    <div class="info-card"><div class="ic"><i data-icon="shield"></i></div><h3>নিয়ম মেনে চলা</h3><p>প্রাইভেট অ্যাকাউন্ট, DRM বা পেওয়াল বাইপাস করা হয় না। শুধু পাবলিক কনটেন্ট — যা আপনার নিজের বা ব্যবহারের অনুমতি আছে।</p></div>
+  </div>
+  <h2>কীভাবে কাজ করে</h2>
+  <p>আপনি লিংক দিলে সার্ভার প্রথমে বুঝে নেয় সেটি ভিডিও, অডিও, ছবি, ক্যারোসেল, অ্যালবাম, প্লেলিস্ট নাকি মিশ্র পোস্ট। তারপর শুধু সত্যিকারের পাওয়া অপশনগুলো দেখায়। ডাউনলোড ব্যাকগ্রাউন্ডে চলে — পজ, রিজিউম, রিট্রাই করা যায় — আর শেষে ফাইলটি যাচাই করা হয় যেন অসম্পূর্ণ ফাইল কখনো "সফল" না দেখায়।</p>
+  <p>MediaGrab ওপেন-সোর্স টুলের ওপর তৈরি: <b>yt-dlp</b> (ভিডিও এক্সট্র্যাকশন), <b>FFmpeg</b> (ভিডিও-অডিও জোড়া ও রূপান্তর), <b>gallery-dl</b> (লগইনসহ Facebook ছবি), <b>FastAPI</b> (সার্ভার)।</p>
+  <h2>কারা ব্যবহার করে</h2>
+  <p>কনটেন্ট ক্রিয়েটর যারা নিজের ভিডিওর ব্যাকআপ রাখেন, শিক্ষার্থী ও শিক্ষক যারা অফলাইনে শেখার উপকরণ রাখেন, আর যে কেউ যারা ধীর ইন্টারনেটে একবার ডাউনলোড করে বারবার দেখতে চান।</p>
+  {{ m.cta() }}
+</div></section>
+{% else %}
+{{ m.page_hero("About MediaGrab", "A fast, private and honest media downloader for the modern web.") }}
+<section class="container page-body"><div class="prose">
+  <p class="lead">MediaGrab is a free web app for saving public videos, photos and audio from YouTube, Facebook, Instagram, X and TikTok — no account and no app install required.</p>
+  <h2>What we stand for</h2>
+  <div class="info-grid">
+    <div class="info-card"><div class="ic"><i data-icon="hd"></i></div><h3>Honest quality</h3><p>We only list resolutions the source really offers. Nothing is upscaled into "fake 4K", and every finished file is verified with FFmpeg before it's handed to you.</p></div>
+    <div class="info-card"><div class="ic"><i data-icon="lock"></i></div><h3>Privacy first</h3><p>No accounts, no tracking. Files are deleted from the server automatically after a short time, and the image converter runs entirely on your device.</p></div>
+    <div class="info-card"><div class="ic"><i data-icon="shield"></i></div><h3>Playing by the rules</h3><p>We never bypass private accounts, DRM or paywalls. MediaGrab is for public content you own or have permission to use.</p></div>
+  </div>
+  <h2>How it works</h2>
+  <p>When you paste a link, the server first detects what it contains — a video, audio, photo, carousel, album, playlist or a mixed post — and shows only the options that genuinely exist. Downloads run in the background (pause, resume and retry are supported) and every file is verified at the end, so an incomplete download is never presented as a success.</p>
+  <p>MediaGrab is built on proven open-source tools: <b>yt-dlp</b> for extraction, <b>FFmpeg</b> for merging and conversion, <b>gallery-dl</b> for logged-in Facebook photos, and <b>FastAPI</b> for the server.</p>
+  <h2>Who it's for</h2>
+  <p>Creators backing up their own uploads, students and teachers keeping learning material for offline use, and anyone on a slow or expensive connection who wants to download once and watch many times.</p>
+  {{ m.cta() }}
+</div></section>
+{% endif %}
+{% endblock %}

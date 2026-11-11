@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+{% import "_macros.html" as m with context %}
+{% set ttl = settings.file_ttl_minutes %}
+{% block main %}
+{% if lang == "bn" %}
+{{ m.page_hero("প্রাইভেসি পলিসি", "সংক্ষেপে: আমরা প্রায় কিছুই সংরক্ষণ করি না।") }}
+<section class="container page-body"><div class="prose">
+  {{ m.updated() }}
+  <div class="callout"><i data-icon="lock"></i><div>কোনো অ্যাকাউন্ট নেই, কোনো অ্যানালিটিক্স বা বিজ্ঞাপন ট্র্যাকার নেই, এবং আমরা আপনার ডেটা বিক্রি বা শেয়ার করি না।</div></div>
+  <h2>আপনার ডিভাইসে যা থাকে</h2>
+  <p>সেটিংস (থিম, ভাষা, পছন্দ), খোলা লিংকের হিস্ট্রি ও সম্প্রতি ডাউনলোড করা ফাইলের তালিকা শুধু আপনার ব্রাউজারের localStorage-এ থাকে। ব্যাকগ্রাউন্ডের নিজস্ব ছবি IndexedDB-তে থাকে। সেটিংস থেকে যেকোনো সময় সব মুছে ফেলতে পারবেন।</p>
+  <h2>কুকি</h2>
+  <ul><li><code>mg_lang</code> — আপনার ভাষা মনে রাখার জন্য।</li><li><code>mg_admin</code> — শুধু সাইটের অ্যাডমিন লগইন করলে (HttpOnly, ৮ ঘণ্টা)।</li></ul>
+  <p>কোনো ট্র্যাকিং বা থার্ড-পার্টি কুকি নেই।</p>
+  <h2>সার্ভারে যা প্রসেস হয়</h2>
+  <ul>
+    <li><b>আপনার দেওয়া লিংক</b> — মিডিয়া খুঁজতে ব্যবহার হয়; সাময়িক ক্যাশে সর্বোচ্চ ১৫ মিনিট থাকে।</li>
+    <li><b>ডাউনলোড করা ফাইল</b> — আপনাকে দেওয়ার জন্য সাময়িকভাবে রাখা হয় এবং {{ ttl }} মিনিট পর স্বয়ংক্রিয়ভাবে মুছে যায়।</li>
+    <li><b>মিডিয়া টুলসে আপলোড করা ফাইল</b> — শুধু রূপান্তর/বিশ্লেষণের জন্য, তারপর {{ ttl }} মিনিটের মধ্যে মুছে যায়। ছবি কনভার্টার, EXIF ভিউয়ার ও ফ্রেম ক্যাপচার ডিভাইসেই চলে — কিছু আপলোড হয় না।</li>
+    <li><b>IP ঠিকানা</b> — অপব্যবহার রোধে (রেট লিমিট) কয়েক মিনিটের জন্য মেমরিতে থাকে; লগ বা ডিস্কে সংরক্ষণ হয় না।</li>
+    <li><b>এরর লগ</b> — সমস্যা সমাধানের জন্য সাম্প্রতিক এররের সংক্ষিপ্ত তথ্য (প্ল্যাটফর্ম, এরর কোড, ট্র্যাকিং প্যারামিটার ছাড়া লিংক) মেমরিতে থাকে; কোনো IP নয়। সার্ভার রিস্টার্টে মুছে যায়।</li>
+  </ul>
+  <h2>থার্ড পার্টি</h2>
+  <p>আপনি যে প্ল্যাটফর্মের লিংক দেন (যেমন YouTube), আমাদের সার্ভার সেখান থেকে কনটেন্ট আনে — আপনার ডিভাইস থেকে সরাসরি নয়। হোস্টিং প্রোভাইডার নিরাপত্তার জন্য সাধারণ সার্ভার লগ রাখতে পারে।</p>
+  <h2>শিশু</h2><p>এই সার্ভিস ১৩ বছরের কম বয়সীদের জন্য নয় এবং আমরা জেনেশুনে কারো ব্যক্তিগত তথ্য সংগ্রহ করি না।</p>
+  <h2>যোগাযোগ</h2><p>প্রাইভেসি সংক্রান্ত প্রশ্নের জন্য <a href="/contact">যোগাযোগ</a> পেজ দেখুন।</p>
+</div></section>
+{% else %}
+{{ m.page_hero("Privacy Policy", "The short version: we store almost nothing.") }}
+<section class="container page-body"><div class="prose">
+  {{ m.updated() }}
+  <div class="callout"><i data-icon="lock"></i><div>No accounts, no analytics or advertising trackers, and we never sell or share your data.</div></div>
+  <h2>Stored on your device</h2>
+  <p>Your settings (theme, language, preferences), the history of links you opened and the list of recent downloads live only in your browser's localStorage. A custom background image is kept in IndexedDB. You can erase all of it at any time from Settings.</p>
+  <h2>Cookies</h2>
+  <ul><li><code>mg_lang</code> — remembers your language.</li><li><code>mg_admin</code> — only set when the site administrator signs in (HttpOnly, 8 hours).</li></ul>
+  <p>There are no tracking or third-party cookies.</p>
+  <h2>Processed on the server</h2>
+  <ul>
+    <li><b>Links you submit</b> — used to find the media; kept in a temporary cache for up to 15 minutes.</li>
+    <li><b>Downloaded files</b> — stored temporarily so you can save them, then deleted automatically after {{ ttl }} minutes.</li>
+    <li><b>Files uploaded to Media Tools</b> — used only for the conversion/analysis you requested and deleted within {{ ttl }} minutes. The image converter, EXIF viewer and frame grabber run on your device — nothing is uploaded.</li>
+    <li><b>IP addresses</b> — held in memory for a few minutes for rate limiting (abuse prevention); never written to logs or disk by MediaGrab.</li>
+    <li><b>Error log</b> — a short in-memory record of recent errors (platform, error code, the link without tracking parameters) to fix problems; no IP addresses. Cleared on restart.</li>
+  </ul>
+  <h2>Third parties</h2>
+  <p>When you submit a link (e.g. to YouTube), our server fetches the content from that platform — your device doesn't contact it through us. Our hosting provider may keep standard server logs for security.</p>
+  <h2>Children</h2><p>The service is not directed at children under 13 and we don't knowingly collect personal information from anyone.</p>
+  <h2>Contact</h2><p>Questions about privacy? See the <a href="/contact">contact page</a>.</p>
+</div></section>
+{% endif %}
+{% endblock %}

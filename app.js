@@ -1,25 +1,17 @@
-// MediaGrab front-end — vanilla JS, no build step.
-import { STRINGS } from './i18n.js';
-import { icon, brandIcon, hydrateIcons, PLATFORM_META } from './icons.js';
+// MediaGrab downloader app (home page) — vanilla JS modules, no build step.
+import {
+  $, $$, esc, sleep, truncate, store, ui, t, STRINGS, locale, localDigits, fmtNum, fmtCompact, fmtBytes, fmtSpeed, fmtDur,
+  fmtDate, timeAgo, applyI18n, setLang, onLang, extractUrl, detectPlatform, pname, api, toast, openModal, closeModal,
+  modalOpen, icon, brandIcon, hydrateIcons, initChrome, showShortcuts, THEMES, ACCENTS, BACKGROUNDS, themePref, setTheme,
+  accentKey, setAccent, bgPref, setBg, setBgImage, motionReduced, setMotion, saveUrl, PLATFORM_META,
+} from './core.js';
 
-/* ------------------------------------------------------------------ helpers */
-const $ = (s, el = document) => el.querySelector(s);
-const $$ = (s, el = document) => [...el.querySelectorAll(s)];
-const esc = (s) => String(s ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-const truncate = (s, n) => (String(s || '').length > n ? String(s).slice(0, n - 1) + '…' : String(s || ''));
 const ACTIVE = new Set(['queued', 'preparing', 'downloading', 'processing']);
-const MAX_PARALLEL = 3;
-
-const store = {
-  get(k, d) { try { const v = localStorage.getItem('mg.' + k); return v == null ? d : JSON.parse(v); } catch { return d; } },
-  set(k, v) { try { localStorage.setItem('mg.' + k, JSON.stringify(v)); } catch { /* quota */ } },
-  raw(k, v) { try { if (v === undefined) return localStorage.getItem('mg.' + k); localStorage.setItem('mg.' + k, v); } catch { return null; } },
+const DEFAULT_SETTINGS = {
+  autoSave: true, autoFetch: true, notify: false, preferH264: true, clipboard: false, parallel: 3, keepHistory: true, favorites: [],
 };
 
 const state = {
-  lang: STRINGS[document.documentElement.lang] ? document.documentElement.lang : 'en',
-  theme: document.documentElement.dataset.theme || 'dark',
   mode: 'single',
   info: null,
   infoUrl: '',
@@ -27,143 +19,20 @@ const state = {
   jobs: new Map(),
   jobMeta: store.get('jobs', {}),
   pending: [],
+  pendingMap: {},
   rowJobs: {},
   plMap: {},
+  gsel: new Set(),
   history: store.get('history', []),
-  settings: Object.assign({ autoSave: true, autoFetch: true, notify: false, preferH264: true }, store.get('settings', {})),
+  recent: store.get('recent', []),
+  settings: Object.assign({}, DEFAULT_SETTINGS, store.get('settings', {})),
   config: null,
   health: null,
   pollTimer: null,
-  installPrompt: null,
+  clipLast: store.raw('clipLast') || '',
 };
-
-/* ------------------------------------------------------------------ i18n & formatting */
-function t(key, vars) {
-  const dict = STRINGS[state.lang] || STRINGS.en;
-  let s = dict[key] ?? STRINGS.en[key] ?? key;
-  if (vars) s = s.replace(/\{(\w+)\}/g, (_, k) => (vars[k] ?? ''));
-  return s;
-}
-const locale = () => (state.lang === 'bn' ? 'bn-BD' : 'en-US');
-const bnDigits = (s) => String(s).replace(/\d/g, (d) => '০১২৩৪৫৬৭৮৯'[d]);
-const localDigits = (s) => (state.lang === 'bn' ? bnDigits(s) : String(s));
-const fmtNum = (n) => new Intl.NumberFormat(locale()).format(n);
-const fmtCompact = (n) => new Intl.NumberFormat(locale(), { notation: 'compact', maximumFractionDigits: 1 }).format(n);
-function fmtBytes(b) {
-  if (!b || b <= 0) return '—';
-  const u = ['B', 'KB', 'MB', 'GB', 'TB'];
-  let i = 0;
-  while (b >= 1024 && i < u.length - 1) { b /= 1024; i++; }
-  return new Intl.NumberFormat(locale(), { maximumFractionDigits: i >= 2 && b < 100 ? 1 : 0 }).format(b) + ' ' + u[i];
-}
-function fmtDur(s) {
-  s = Math.max(0, Math.round(s || 0));
-  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60;
-  const str = h ? `${h}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}` : `${m}:${String(sec).padStart(2, '0')}`;
-  return localDigits(str);
-}
-function fmtDate(iso) {
-  try { return new Date(iso + 'T00:00:00').toLocaleDateString(locale(), { year: 'numeric', month: 'short', day: 'numeric' }); } catch { return iso; }
-}
-function timeAgo(ts) {
-  const rtf = new Intl.RelativeTimeFormat(locale(), { numeric: 'auto' });
-  const diff = (ts - Date.now()) / 1000;
-  const units = [['year', 31536000], ['month', 2592000], ['day', 86400], ['hour', 3600], ['minute', 60]];
-  for (const [u, sec] of units) if (Math.abs(diff) >= sec) return rtf.format(Math.round(diff / sec), u);
-  return rtf.format(Math.round(diff), 'second');
-}
-
-/* ------------------------------------------------------------------ URL helpers */
-const PLATFORM_HOSTS = {
-  youtube: ['youtube.com', 'youtu.be', 'youtube-nocookie.com'],
-  facebook: ['facebook.com', 'fb.watch', 'fb.com', 'fb.me'],
-  instagram: ['instagram.com', 'instagr.am'],
-  twitter: ['twitter.com', 'x.com', 't.co'],
-  tiktok: ['tiktok.com'],
-  vimeo: ['vimeo.com'], reddit: ['reddit.com', 'redd.it'], dailymotion: ['dailymotion.com', 'dai.ly'],
-  soundcloud: ['soundcloud.com'], pinterest: ['pinterest.com', 'pin.it'], threads: ['threads.net', 'threads.com'],
-  twitch: ['twitch.tv'], linkedin: ['linkedin.com'], snapchat: ['snapchat.com'], bilibili: ['bilibili.com', 'bilibili.tv', 'b23.tv'],
-};
-function extractUrl(text) {
-  const s = String(text || '').trim();
-  const m = s.match(/https?:\/\/[^\s<>"'`]+/i);
-  if (m) return m[0].replace(/[.,;:!?)\]}>]+$/, '');
-  if (/^(www\.)?[\w-]+(\.[\w-]+)+\/\S*$/i.test(s)) return 'https://' + s;
-  return null;
-}
-function detectPlatform(url) {
-  try {
-    const h = new URL(url).hostname.toLowerCase();
-    for (const [p, hosts] of Object.entries(PLATFORM_HOSTS)) if (hosts.some((x) => h === x || h.endsWith('.' + x))) return p;
-    return 'other';
-  } catch { return null; }
-}
-const pname = (p) => (PLATFORM_META[p] || PLATFORM_META.other).name;
-
-/* ------------------------------------------------------------------ API */
-async function api(path, { method = 'GET', body, raw = false } = {}) {
-  const res = await fetch(path, {
-    method,
-    headers: body ? { 'content-type': 'application/json' } : undefined,
-    body: body ? JSON.stringify(body) : undefined,
-  });
-  if (raw && res.ok) return res;
-  let data = null;
-  try { data = await res.json(); } catch { /* not json */ }
-  if (!res.ok) {
-    const err = new Error((data && data.error) || t('err.server', { s: res.status }));
-    err.code = (data && data.code) || `http_${res.status}`;
-    err.status = res.status;
-    throw err;
-  }
-  return data;
-}
-
-/* ------------------------------------------------------------------ toasts */
-function toast(msg, type = 'info', { action, onAction, timeout = 4200 } = {}) {
-  const wrap = $('#toasts');
-  const el = document.createElement('div');
-  el.className = `toast ${type}`;
-  const ic = type === 'ok' ? 'check-circle' : type === 'err' ? 'alert' : 'info';
-  el.innerHTML = `<span class="ti">${icon(ic)}</span><span>${esc(msg)}</span>${action ? `<button class="ta">${esc(action)}</button>` : ''}`;
-  if (action) el.querySelector('.ta').addEventListener('click', () => { onAction?.(); close(); });
-  wrap.appendChild(el);
-  while (wrap.children.length > 4) wrap.firstElementChild.remove();
-  const close = () => { el.classList.add('out'); setTimeout(() => el.remove(), 300); };
-  setTimeout(close, timeout);
-}
-
-/* ------------------------------------------------------------------ theme / language */
-function applyTheme(theme) {
-  state.theme = theme;
-  document.documentElement.dataset.theme = theme;
-  store.raw('theme', theme);
-  const old = $('#themeIcon');
-  if (old) { const tpl = document.createElement('template'); tpl.innerHTML = icon(theme === 'dark' ? 'sun' : 'moon'); const svg = tpl.content.firstElementChild; svg.id = 'themeIcon'; old.replaceWith(svg); }
-  $('meta[name="theme-color"]').setAttribute('content', theme === 'dark' ? '#0b0a14' : '#f7f6fc');
-}
-
-function applyI18n(root = document) {
-  $$('[data-i18n]', root).forEach((el) => { el.textContent = t(el.dataset.i18n); });
-  $$('[data-i18n-html]', root).forEach((el) => { el.innerHTML = t(el.dataset.i18nHtml); });
-  $$('[data-i18n-placeholder]', root).forEach((el) => { el.placeholder = t(el.dataset.i18nPlaceholder); });
-  $$('[data-i18n-label]', root).forEach((el) => { el.label = t(el.dataset.i18nLabel); });
-}
-
-function setLang(lang) {
-  state.lang = STRINGS[lang] ? lang : 'en';
-  document.documentElement.lang = state.lang;
-  store.raw('lang', state.lang);
-  $('#langLabel').textContent = state.lang === 'bn' ? 'EN' : 'বাংলা';
-  applyI18n();
-  renderHeroTitle();
-  renderStatic();
-  renderBatchCount();
-  if (state.info) (state.info.type === 'playlist' ? renderPlaylist : renderVideo)(state.info, true);
-  renderQueue();
-  renderHistory();
-  renderSettings();
-}
+const maxParallel = () => Math.min(5, Math.max(1, +state.settings.parallel || 3));
+const saveSettings = () => store.set('settings', state.settings);
 
 /* ------------------------------------------------------------------ hero rotator */
 const ROTATE = ['YouTube', 'Facebook', 'Instagram', 'X (Twitter)', 'TikTok'];
@@ -176,7 +45,7 @@ function renderHeroTitle() {
 function startRotator() {
   setInterval(() => {
     const el = $('#rotator');
-    if (!el || document.hidden) return;
+    if (!el || document.hidden || motionReduced()) return;
     el.classList.add('out');
     setTimeout(() => {
       rotIdx = (rotIdx + 1) % ROTATE.length;
@@ -191,27 +60,42 @@ function startRotator() {
 /* ------------------------------------------------------------------ static sections */
 const FEATURES = [
   ['zap', 'f1'], ['hd', 'f2'], ['music', 'f3'], ['shield', 'f4'], ['layers', 'f5'], ['scissors', 'f6'],
-  ['captions', 'f7'], ['skip', 'f8'], ['image', 'f9'], ['smartphone', 'f10'], ['globe', 'f11'], ['lock', 'f12'],
+  ['captions', 'f7'], ['skip', 'f8'], ['images', 'f9'], ['smartphone', 'f10'], ['globe', 'f11'], ['lock', 'f12'],
 ];
 const PLATFORM_CARDS = ['youtube', 'facebook', 'instagram', 'twitter', 'tiktok'];
+const orderedPlatforms = () => {
+  const fav = state.settings.favorites || [];
+  return [...fav.filter((p) => PLATFORM_CARDS.includes(p)), ...PLATFORM_CARDS.filter((p) => !fav.includes(p))];
+};
+
+function renderChips() {
+  const fav = state.settings.favorites || [];
+  $('#platformChips').innerHTML = orderedPlatforms().map((p) => `
+    <button type="button" class="pchip ${fav.includes(p) ? 'is-fav' : ''}" data-chip="${p}"><span class="pdot pf-${p}">${brandIcon(p)}</span>${esc(pname(p))}<span class="fav" data-fav="${p}" role="button" aria-label="★ ${esc(pname(p))}" title="${esc(t('fav.hint'))}">★</span></button>`).join('')
+    + `<a class="pchip more" href="/platforms">${esc(t('chips.more'))}</a>`;
+}
 
 function renderStatic() {
-  $('#platformChips').innerHTML = PLATFORM_CARDS.map((p) => `
-    <button type="button" class="pchip" data-chip="${p}"><span class="pdot pf-${p}">${brandIcon(p)}</span>${esc(pname(p))}</button>`).join('')
-    + `<span class="pchip more">${esc(t('chips.more'))}</span>`;
-
+  renderChips();
   $('#featuresGrid').innerHTML = FEATURES.map(([ic, k]) => `
     <div class="feature"><div class="fi">${icon(ic)}</div><h3>${esc(t(k + '.t'))}</h3><p>${esc(t(k + '.d'))}</p></div>`).join('');
-
   $('#platformGrid').innerHTML = PLATFORM_CARDS.map((p) => `
     <div class="pcard"><div class="picon pf-${p}">${brandIcon(p)}</div><h3>${esc(pname(p))}</h3>
       <p>${esc(t('pc.' + p + '.d'))}</p>
       <div class="ptags">${t('pc.' + p + '.tags').split(',').map((x) => `<span>${esc(x.trim())}</span>`).join('')}</div></div>`).join('');
-
   const faqs = [];
-  for (let i = 1; STRINGS.en['faq.q' + i]; i++) faqs.push(i);
+  for (let i = 1; STRINGS.en['faq.q' + i] && faqs.length < 6; i++) faqs.push(i);
   $('#faqList').innerHTML = faqs.map((i) => `<details><summary>${esc(t('faq.q' + i))}</summary><div class="ans">${t('faq.a' + i)}</div></details>`).join('');
   if (state.health) $('#footerVersion').textContent = `v${state.health.version} · yt-dlp ${state.health.yt_dlp}`;
+}
+
+function toggleFavorite(p) {
+  const fav = new Set(state.settings.favorites || []);
+  fav.has(p) ? fav.delete(p) : fav.add(p);
+  state.settings.favorites = [...fav];
+  saveSettings();
+  renderChips();
+  if (!$('#settingsPanel').classList.contains('hidden')) renderSettings();
 }
 
 /* ------------------------------------------------------------------ input handling */
@@ -239,8 +123,7 @@ function batchUrls() {
   return $('#batchInput').value.split(/\s+/).map(extractUrl).filter((u) => u && !seen.has(u) && seen.add(u));
 }
 function renderBatchCount() {
-  const n = batchUrls().length;
-  $('#batchCount').textContent = t('batch.count', { n: fmtNum(n) });
+  $('#batchCount').textContent = t('batch.count', { n: fmtNum(batchUrls().length) });
 }
 
 async function pasteFromClipboard() {
@@ -248,6 +131,7 @@ async function pasteFromClipboard() {
     const text = await navigator.clipboard.readText();
     const url = extractUrl(text);
     if (!url) { toast(t('err.noLinkClipboard'), 'err'); return; }
+    hideClipSuggest();
     if (state.mode === 'batch') { $('#batchInput').value += ($('#batchInput').value ? '\n' : '') + text.trim(); renderBatchCount(); return; }
     input().value = url;
     updatePlatformBadge();
@@ -258,6 +142,32 @@ async function pasteFromClipboard() {
   }
 }
 
+/* -------- clipboard detection (only with permission) */
+async function clipboardPermission() {
+  try { return (await navigator.permissions.query({ name: 'clipboard-read' })).state; } catch { return 'unknown'; }
+}
+async function checkClipboard() {
+  if (!state.settings.clipboard || document.hidden || !navigator.clipboard?.readText) return;
+  if ((await clipboardPermission()) !== 'granted') return;
+  try {
+    const url = extractUrl(await navigator.clipboard.readText());
+    if (!url || url === state.clipLast || url === state.infoUrl || url === extractUrl(input().value)) return;
+    showClipSuggest(url);
+  } catch { /* page not focused */ }
+}
+function showClipSuggest(url) {
+  const box = $('#clipSuggest');
+  const p = detectPlatform(url);
+  box.className = 'clip-suggest';
+  box.innerHTML = `<span class="pdot pf-${p}">${brandIcon(p)}</span><b>${esc(t('clip.found'))}</b><span class="cs-url">${esc(url)}</span>
+    <button type="button" class="btn btn-primary btn-xs" id="clipUse">${esc(t('clip.use'))}</button>
+    <button type="button" class="icon-btn" id="clipNo" aria-label="${esc(t('clip.dismiss'))}">${icon('x')}</button>`;
+  const remember = () => { state.clipLast = url; store.raw('clipLast', url); };
+  $('#clipUse').onclick = () => { remember(); hideClipSuggest(); fetchInfo(url); };
+  $('#clipNo').onclick = () => { remember(); hideClipSuggest(); };
+}
+function hideClipSuggest() { const b = $('#clipSuggest'); b.className = 'hidden'; b.innerHTML = ''; }
+
 /* ------------------------------------------------------------------ fetch info */
 function setLoading(on) {
   const b = $('#fetchBtn');
@@ -267,12 +177,9 @@ function setLoading(on) {
 
 async function fetchInfo(raw, { playlist = false } = {}) {
   const url = extractUrl(raw);
-  if (!url) {
-    toast(t('err.invalidUrl'), 'err');
-    input().focus();
-    return;
-  }
+  if (!url) { toast(t('err.invalidUrl'), 'err'); input().focus(); return; }
   setMode('single', false);
+  hideClipSuggest();
   input().value = url;
   updatePlatformBadge();
   state.infoUrl = url;
@@ -286,7 +193,7 @@ async function fetchInfo(raw, { playlist = false } = {}) {
     const data = await api('/api/info', { method: 'POST', body: { url, playlist } });
     if (token !== state.fetchToken) return;
     state.info = data;
-    if (data.type === 'playlist') renderPlaylist(data); else renderVideo(data);
+    renderInfo(data);
     addHistory(data, url);
     requestAnimationFrame(() => scrollToResult(true));
   } catch (e) {
@@ -298,12 +205,18 @@ async function fetchInfo(raw, { playlist = false } = {}) {
   }
 }
 
+function renderInfo(d, keep = false) {
+  if (d.type === 'playlist') renderPlaylist(d, keep);
+  else if (d.type === 'gallery') renderGallery(d, keep);
+  else renderVideo(d, keep);
+}
+
 function scrollToResult(onlyIfHidden = false) {
   const el = $('#result');
   const navH = ($('.nav')?.offsetHeight || 64) + 14;
   const top = el.getBoundingClientRect().top;
   if (onlyIfHidden && top >= navH - 4 && top < window.innerHeight * 0.6) return;
-  window.scrollTo({ top: Math.max(0, top + window.scrollY - navH), behavior: 'smooth' });
+  window.scrollTo({ top: Math.max(0, top + window.scrollY - navH), behavior: motionReduced() ? 'auto' : 'smooth' });
 }
 
 let skeletonTimer = null;
@@ -311,14 +224,14 @@ function renderSkeleton(platform, playlist) {
   clearInterval(skeletonTimer);
   const msgs = [t('load.connect', { p: pname(platform || 'other') }), t('load.reading'), playlist ? t('load.playlist') : t('load.formats'), t('load.almost')];
   $('#result').innerHTML = `
-    <div class="card skeleton-card">
+    <div class="card skeleton-card" aria-busy="true">
       <div class="rc-top">
         <div class="sk" style="aspect-ratio:16/9;border-radius:16px"></div>
         <div style="display:flex;flex-direction:column;gap:12px">
+          <div class="sk" style="height:22px;width:120px;border-radius:99px"></div>
           <div class="sk" style="height:26px;width:85%"></div><div class="sk" style="height:26px;width:60%"></div>
           <div class="sk" style="height:18px;width:40%"></div>
           <div style="display:flex;gap:8px"><div class="sk" style="height:28px;width:90px;border-radius:99px"></div><div class="sk" style="height:28px;width:70px;border-radius:99px"></div><div class="sk" style="height:28px;width:110px;border-radius:99px"></div></div>
-          <div class="sk" style="height:54px;width:100%"></div>
         </div>
       </div>
       <div class="sk-status"><span class="spinner"></span><span id="skMsg">${esc(msgs[0])}</span></div>
@@ -336,7 +249,7 @@ function renderSkeleton(platform, playlist) {
 function renderError(e, url, playlist) {
   const tips = t('tip.' + (e.code || 'failed'));
   $('#result').innerHTML = `
-    <div class="card error-card">
+    <div class="card error-card" role="alert">
       <div class="ei">${icon('alert')}</div>
       <h3>${esc(t('err.title'))}</h3>
       <p>${esc(e.message)}</p>
@@ -350,12 +263,15 @@ function renderError(e, url, playlist) {
   $('#clearInfo').onclick = () => { $('#result').innerHTML = ''; input().value = ''; updatePlatformBadge(); input().focus(); };
 }
 
-/* ------------------------------------------------------------------ single video view */
+/* ------------------------------------------------------------------ shared result bits */
 const stat = (ic, text) => `<span class="stat">${icon(ic)}${esc(text)}</span>`;
 const initial = (s) => (String(s || '?').trim()[0] || '?').toUpperCase();
+const MT_ICON = { video: 'film', audio: 'music', photo: 'image', carousel: 'images', album: 'images', mixed: 'layers', playlist: 'list' };
+const mtBadge = (mt) => `<span class="mt-badge">${icon(MT_ICON[mt] || 'film')}${esc(t('mt.' + mt))}</span>`;
 
+/* ------------------------------------------------------------------ single video / audio view */
 function renderVideo(d, keepTab = false) {
-  const prevTab = keepTab ? ($('.rc-tab.active')?.dataset.tab || 'video') : 'video';
+  const prevTab = keepTab ? ($('.rc-tab.active')?.dataset.tab || 'video') : (d.video.length ? 'video' : 'audio');
   const prevAdv = keepTab ? readAdvancedRaw() : null;
   const first = d.video[0];
   const portrait = first && first.width && first.height && first.height > first.width;
@@ -366,24 +282,26 @@ function renderVideo(d, keepTab = false) {
     d.upload_date && stat('calendar', fmtDate(d.upload_date)),
   ].filter(Boolean).join('');
   const tabs = [
-    ['video', 'film', t('tab.video'), d.video.length],
+    d.video.length ? ['video', 'film', t('tab.video'), d.video.length] : null,
     ['audio', 'music', t('tab.audio'), d.audio.length],
     ['thumbs', 'image', t('tab.thumbs'), d.thumbnails.length],
     d.subtitles.length ? ['subs', 'captions', t('tab.subs'), d.subtitles.length] : null,
     ['advanced', 'sliders', t('tab.advanced'), null],
   ].filter(Boolean);
   const maxMin = state.config?.max_duration_minutes;
+  const best = first ? `${first.label}${first.original ? ` · ${first.original}` : ''}` : '';
 
   $('#result').innerHTML = `
   <article class="card result-card">
     <div class="rc-top">
       <div class="rc-thumb ${portrait ? 'portrait' : ''}" id="rcThumb" role="button" tabindex="0" aria-label="${esc(t('rc.preview'))}">
-        ${d.thumbnail ? `<img src="${esc(d.thumbnail)}" alt="" onerror="this.remove()">` : ''}
+        ${d.thumbnail ? `<img src="${esc(d.thumbnail)}" alt="" decoding="async" data-fallback>` : ''}
         <div class="play"><span>${icon('play')}</span></div>
         ${d.duration ? `<span class="rc-duration">${fmtDur(d.duration)}</span>` : ''}
         <span class="rc-pf pf-${esc(d.platform)}">${brandIcon(d.platform)}${esc(pname(d.platform))}</span>
       </div>
       <div class="rc-meta">
+        <div class="rc-kickers">${mtBadge(d.media_type || 'video')}${d.max_badge && d.video.length ? `<span class="q-badge q-${esc(d.max_badge)}">${esc(d.max_badge)}</span>` : ''}</div>
         <h2 class="rc-title">${esc(d.title)}</h2>
         ${d.uploader ? `<div class="rc-uploader"><span class="avatar">${esc(initial(d.uploader))}</span><span>${esc(d.uploader)}</span>${d.verified ? `<span class="verified" title="Verified">${icon('verified')}</span>` : ''}</div>` : ''}
         ${stats ? `<div class="rc-stats">${stats}</div>` : ''}
@@ -402,32 +320,35 @@ function renderVideo(d, keepTab = false) {
       ${tabs.map(([id, ic, label, n]) => `<button class="rc-tab" type="button" role="tab" data-tab="${id}">${icon(ic)}${esc(label)}${n != null ? `<span class="count">${localDigits(n)}</span>` : ''}${id === 'advanced' ? '<span class="dot-on hidden" id="advDot"></span>' : ''}</button>`).join('')}
     </div>
     <div class="adv-active hidden" id="advActive"></div>
-    <div class="rc-panel" data-panel="video">${videoPanel(d)}</div>
-    <div class="rc-panel hidden" data-panel="audio">${audioPanel(d)}</div>
+    ${d.video.length ? `<div class="rc-panel" data-panel="video">
+      ${d.formats_hidden ? `<div class="max-note warn">${icon('alert')}<div>${esc(t('rc.hidden'))}</div></div>` : ''}
+      ${best ? `<div class="max-note">${icon('info')}<div>${esc(t('rc.maxAvail', { q: localDigits(best) }))}${d.platform === 'youtube' && d.max_res && d.max_res < 2160 && !d.formats_hidden ? ' · ' + esc(t('rc.no4k', { q: localDigits(first.label) })) : ''}</div></div>` : ''}
+      ${videoPanel(d)}</div>` : ''}
+    <div class="rc-panel hidden" data-panel="audio">${d.media_type === 'audio' ? `<div class="max-note">${icon('music')}<div>${esc(t('rc.audioOnly'))}</div></div>` : ''}${audioPanel(d)}</div>
     <div class="rc-panel hidden" data-panel="thumbs">${thumbsPanel(d)}</div>
     ${d.subtitles.length ? `<div class="rc-panel hidden" data-panel="subs">${subsPanel(d)}</div>` : ''}
     <div class="rc-panel hidden" data-panel="advanced">${advancedPanel(d)}</div>
   </article>`;
 
   hydrateIcons($('#result'));
-  switchTab(tabs.some((x) => x[0] === prevTab) ? prevTab : 'video');
+  switchTab(tabs.some((x) => x[0] === prevTab) ? prevTab : tabs[0][0]);
   if (prevAdv) writeAdvancedRaw(prevAdv);
   bindResult(d);
   updateAdvancedIndicator();
   updateRowButtons();
 }
 
-function dlButton(kind, quality, label) {
-  return `<button class="btn-dl" type="button" data-dl data-kind="${kind}" data-quality="${esc(quality)}" data-label="${esc(label)}">${icon('download')}<span>${esc(t('btn.download'))}</span></button>`;
+function dlButton(kind, quality, label, extra = '') {
+  return `<button class="btn-dl" type="button" data-dl data-kind="${kind}" data-quality="${esc(quality)}" data-label="${esc(label)}" ${extra}>${icon('download')}<span>${esc(t('btn.download'))}</span></button>`;
 }
 
 function videoPanel(d) {
   if (!d.video.length) return `<div class="empty-note">${esc(t('rc.noVideo'))}</div>`;
   return `<div class="fmt-list">${d.video.map((v) => {
-    const extra = [v.ext.toUpperCase(), v.codec, v.fps && v.fps > 30 ? `${v.fps}fps` : ''].filter(Boolean).join(' · ');
+    const extra = [v.ext.toUpperCase(), (v.codecs && v.codecs.length > 1 ? v.codecs.join('/') : v.codec), v.fps && v.fps > 30 ? `${v.fps}fps` : ''].filter(Boolean).join(' · ');
     return `<div class="fmt-row">
       <span class="q-badge q-${v.badge}">${esc(v.badge)}</span>
-      <div class="fmt-main"><b>${esc(v.label)}${v.hdr ? ' <span class="tag hdr">HDR</span>' : ''}${v === d.video[0] ? ` <span class="tag">${esc(t('rc.best'))}</span>` : ''}</b><small>${esc(extra)}${v.width && v.height ? ` · ${localDigits(v.width)}×${localDigits(v.height)}` : ''}</small></div>
+      <div class="fmt-main"><b>${esc(v.label)}${v.hdr ? ' <span class="tag hdr">HDR</span>' : ''}${v === d.video[0] ? ` <span class="tag">${esc(t('rc.best'))}</span>` : ''}</b><small>${v.original ? `<span class="orig">${esc(t('rc.orig', { r: localDigits(v.original) }))}</span> · ` : ''}${esc(extra)}</small></div>
       <span class="fmt-size">${v.size ? '~' + fmtBytes(v.size) : '—'}</span>
       ${dlButton('video', v.id === 'best' ? 'best' : v.id, v.label)}
     </div>`;
@@ -455,7 +376,7 @@ function audioPanel(d) {
 function thumbsPanel(d) {
   if (!d.thumbnails.length) return `<div class="empty-note">${esc(t('rc.noThumbs'))}</div>`;
   return `<div class="thumb-grid">${d.thumbnails.map((th) => `
-    <div class="thumb-card"><div class="ti"><img loading="lazy" src="${esc(th.url)}" alt="" onerror="this.remove()"></div>
+    <div class="thumb-card"><div class="ti"><img loading="lazy" decoding="async" src="${esc(th.url)}" alt="" data-fallback></div>
       <div class="tf"><span>${esc(localDigits(th.label === 'Original' ? t('rc.original') : th.label))}</span>
       <a class="chip-btn" href="${esc(th.download)}" download>${icon('download')}${esc(t('btn.save'))}</a></div></div>`).join('')}</div>`;
 }
@@ -478,9 +399,9 @@ function advancedPanel(d) {
       <h4>${icon('scissors')}${esc(t('adv.trim'))}</h4>
       <div class="row2">
         <label class="field">${esc(t('adv.start'))}<input class="input" id="trimStart" inputmode="numeric" placeholder="0:00"></label>
-        <label class="field">${esc(t('adv.end'))}<input class="input" id="trimEnd" inputmode="numeric" placeholder="${d.duration ? fmtDur(d.duration).replace(/[০-৯]/g, (c) => '০১২৩৪৫৬৭৮৯'.indexOf(c)) : '1:30'}"></label>
+        <label class="field">${esc(t('adv.end'))}<input class="input" id="trimEnd" inputmode="numeric" placeholder="${d.duration ? asciiDigits(fmtDur(d.duration)) : '1:30'}"></label>
       </div>
-      ${chapters.length ? `<select class="select" id="chapterSel"><option value="">${esc(t('adv.chapter'))}</option>${chapters.map((c, i) => `<option value="${i}">${esc(fmtDur(c.start))} — ${esc(c.title)}</option>`).join('')}</select>` : ''}
+      ${chapters.length ? `<select class="select" id="chapterSel" aria-label="${esc(t('adv.chapter'))}"><option value="">${esc(t('adv.chapter'))}</option>${chapters.map((c, i) => `<option value="${i}">${esc(fmtDur(c.start))} — ${esc(c.title)}</option>`).join('')}</select>` : ''}
       <label class="switch"><input type="checkbox" id="preciseCut"><span class="track"></span>${esc(t('adv.precise'))}</label>
       <p>${esc(t('adv.trimHint'))}</p>
     </div>
@@ -498,11 +419,11 @@ function advancedPanel(d) {
     ${d.subtitles.length ? `<div class="adv-block">
       <h4>${icon('captions')}${esc(t('adv.subs'))}</h4>
       <label class="switch"><input type="checkbox" id="embedSubs"><span class="track"></span>${esc(t('adv.embedSubs'))}</label>
-      <select class="select" id="subLang">${subOpts}</select>
+      <select class="select" id="subLang" aria-label="${esc(t('adv.subs'))}">${subOpts}</select>
     </div>` : ''}
     <div class="adv-block">
       <h4>${icon('type')}${esc(t('adv.filename'))}</h4>
-      <input class="input" id="customName" maxlength="140" placeholder="${esc(truncate(d.title, 60))}">
+      <input class="input" id="customName" maxlength="140" placeholder="${esc(truncate(d.title, 60))}" aria-label="${esc(t('adv.filename'))}">
       <p>${esc(t('adv.filenameHint'))}</p>
     </div>
   </div>
@@ -565,7 +486,7 @@ function updateAdvancedIndicator() {
 }
 
 function switchTab(id) {
-  $$('.rc-tab').forEach((b) => b.classList.toggle('active', b.dataset.tab === id));
+  $$('.rc-tab').forEach((b) => { b.classList.toggle('active', b.dataset.tab === id); b.setAttribute('aria-selected', String(b.dataset.tab === id)); });
   $$('.rc-panel').forEach((p) => p.classList.toggle('hidden', p.dataset.panel !== id));
 }
 
@@ -582,18 +503,16 @@ function bindResult(d) {
   };
   th?.addEventListener('click', preview);
   th?.addEventListener('keydown', (e) => { if (e.key === 'Enter') preview(); });
-
   $$('[data-dl]', root).forEach((btn) => btn.addEventListener('click', () => onRowDownload(btn)));
   $$('[data-sub]', root).forEach((btn) => btn.addEventListener('click', () => downloadSubtitle(btn, d)));
-
   const adv = $('[data-panel="advanced"]', root);
   adv.addEventListener('input', updateAdvancedIndicator);
   adv.addEventListener('change', updateAdvancedIndicator);
   $('#chapterSel')?.addEventListener('change', (e) => {
     const c = d.chapters[+e.target.value];
     if (!c) return;
-    $('#trimStart').value = fmtDur(c.start).replace(/[০-৯]/g, (x) => '০১২৩৪৫৬৭৮৯'.indexOf(x));
-    $('#trimEnd').value = c.end != null ? fmtDur(c.end).replace(/[০-৯]/g, (x) => '০১২৩৪৫৬৭৮৯'.indexOf(x)) : '';
+    $('#trimStart').value = asciiDigits(fmtDur(c.start));
+    $('#trimEnd').value = c.end != null ? asciiDigits(fmtDur(c.end)) : '';
     updateAdvancedIndicator();
   });
   $('#advReset')?.addEventListener('click', () => {
@@ -609,18 +528,24 @@ async function onRowDownload(btn) {
   const jid = state.rowJobs[key];
   const job = jid && state.jobs.get(jid);
   if (job && job.status === 'finished') return saveFile(job);
-  if (job && ACTIVE.has(job.status)) return openDrawer('queue');
-  if (!validateAdvanced()) return;
+  if (job && (ACTIVE.has(job.status) || job.status === 'paused')) return openDrawer('queue');
+  if (job && (job.status === 'error' || job.status === 'cancelled')) return retryJob(job.id);
   const d = state.info;
   const kind = btn.dataset.kind;
+  let body;
+  if (kind === 'gallery') {
+    const items = btn.dataset.items ? btn.dataset.items.split(',').map(Number) : [];
+    const it = items.length === 1 ? d.items.find((x) => x.index === items[0]) : null;
+    body = { url: state.infoUrl, kind: 'gallery', items, title: d.title, thumbnail: it?.preview || d.thumbnail };
+  } else {
+    if (!validateAdvanced()) return;
+    body = { url: state.infoUrl, kind, quality: btn.dataset.quality, label: btn.dataset.label, title: d?.title, thumbnail: d?.thumbnail, options: readAdvanced(kind) };
+  }
   btn.disabled = true;
   try {
-    const created = await submitJob({
-      url: state.infoUrl, kind, quality: btn.dataset.quality, label: btn.dataset.label,
-      title: d?.title, thumbnail: d?.thumbnail, options: readAdvanced(kind),
-    });
+    const created = await submitJob(body);
     if (created) state.rowJobs[key] = created.id;
-  } finally {
+  } catch { /* toast shown */ } finally {
     btn.disabled = false;
     updateRowButtons();
   }
@@ -631,9 +556,11 @@ function updateRowButtons() {
     const job = state.jobs.get(state.rowJobs[`${btn.dataset.kind}:${btn.dataset.quality}`]);
     btn.classList.remove('is-busy', 'is-done', 'is-error', 'indeterminate');
     btn.style.removeProperty('--p');
-    if (!job) { btn.innerHTML = `${icon('download')}<span>${esc(t('btn.download'))}</span>`; return; }
+    const baseLabel = btn.dataset.text || t('btn.download');
+    if (!job) { btn.innerHTML = `${icon(btn.dataset.icon || 'download')}<span>${esc(baseLabel)}</span>`; return; }
     if (job.status === 'finished') { btn.classList.add('is-done'); btn.innerHTML = `${icon('save')}<span>${esc(t('btn.saveFile'))}</span>`; return; }
     if (job.status === 'error' || job.status === 'cancelled') { btn.classList.add('is-error'); btn.innerHTML = `${icon('refresh')}<span>${esc(t('btn.retry'))}</span>`; return; }
+    if (job.status === 'paused') { btn.innerHTML = `${icon('pause')}<span>${esc(t('stage.short.paused'))}</span>`; return; }
     btn.classList.add('is-busy');
     const indet = job.status !== 'downloading' || !job.progress;
     btn.classList.toggle('indeterminate', indet);
@@ -653,11 +580,9 @@ async function downloadSubtitle(btn, d) {
     const cd = res.headers.get('content-disposition') || '';
     const m = cd.match(/filename\*=UTF-8''([^;]+)/i);
     const name = m ? decodeURIComponent(m[1]) : `${truncate(d.title, 80)} [${btn.dataset.sub}].${btn.dataset.fmt}`;
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = name;
-    document.body.appendChild(a); a.click(); a.remove();
-    setTimeout(() => URL.revokeObjectURL(a.href), 4000);
+    const url = URL.createObjectURL(blob);
+    saveUrl(url, name);
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
     toast(t('toast.subSaved'), 'ok');
   } catch (e) {
     toast(e.message, 'err');
@@ -667,13 +592,144 @@ async function downloadSubtitle(btn, d) {
   }
 }
 
+/* ------------------------------------------------------------------ photo / carousel / album / mixed view */
+function renderGallery(d, keep = false) {
+  const visual = d.items.filter((i) => i.type !== 'audio');
+  if (!keep) state.gsel = new Set(visual.map((i) => i.index));
+  const sub = [
+    d.uploader ? `<span>${icon('verified')} ${esc(d.uploader)}</span>` : '',
+    d.upload_date ? `<span>${icon('calendar')} ${esc(fmtDate(d.upload_date))}</span>` : '',
+    d.counts.image ? `<span>${icon('image')} ${esc(t('g.photos', { n: localDigits(d.counts.image) }))}</span>` : '',
+    d.counts.video ? `<span>${icon('film')} ${esc(t('g.videos', { n: localDigits(d.counts.video) }))}</span>` : '',
+    d.counts.audio ? `<span>${icon('music')} ${esc(t('g.sound'))}</span>` : '',
+  ].filter(Boolean).join('');
+  const note = d.note === 'partial' ? t('g.partial', { n: localDigits(d.counts.image), t: localDigits(d.total || '?') }) : d.note === 'preview_only' ? t('g.preview') : '';
+  $('#result').innerHTML = `
+  <article class="card gallery-card">
+    <div class="g-head">
+      <div class="g-cover">${d.thumbnail ? `<img src="${esc(d.thumbnail)}" alt="" decoding="async" data-fallback>` : ''}</div>
+      <div style="min-width:0">
+        <div class="rc-kickers">${mtBadge(d.media_type)}<span class="pl-kicker pf-${esc(d.platform)}">${brandIcon(d.platform)}${esc(pname(d.platform))}</span></div>
+        <h2>${esc(d.title)}</h2>
+        <div class="g-sub">${sub}</div>
+      </div>
+    </div>
+    ${note ? `<div class="max-note warn" style="margin-top:14px">${icon('info')}<div>${esc(note)}</div></div>` : ''}
+    ${visual.length > 1 ? `<div class="g-toolbar">
+      <label class="check"><input type="checkbox" id="gAll" checked><span>${esc(t('g.selectAll'))}</span></label>
+      <span class="muted" id="gCount"></span><span class="grow"></span>
+      <button class="btn btn-ghost btn-sm" type="button" id="gSel">${icon('download')}<span id="gSelLabel"></span></button>
+      ${dlButton('gallery', 'all', 'ZIP', 'data-items="" data-icon="archive" data-text="' + esc(t('g.dlAll')) + '" id="gZip"')}
+    </div>` : ''}
+    <div class="g-grid" id="gGrid" style="${visual.length > 1 ? '' : 'margin-top:16px'}">
+      ${visual.map((it) => `
+        <div class="g-item ${state.gsel.has(it.index) ? 'selected' : ''}" data-gi="${it.index}">
+          ${visual.length > 1 ? `<label class="g-check" aria-label="${esc(t('g.of', { i: localDigits(it.index), n: localDigits(visual.length) }))}"><input type="checkbox" data-gsel="${it.index}" ${state.gsel.has(it.index) ? 'checked' : ''}>${icon('check')}</label>` : ''}
+          ${visual.length > 1 ? `<span class="g-idx">${localDigits(it.index)}/${localDigits(visual.length)}</span>` : ''}
+          <div class="g-media" data-view="${it.index}" role="button" tabindex="0" aria-label="${esc(t('g.view'))}">
+            ${it.preview ? `<img loading="lazy" decoding="async" src="${esc(it.preview)}" alt="${esc(it.alt || '')}" data-fallback>` : icon(it.type === 'video' ? 'film' : 'image')}
+            ${it.type === 'video' ? `<span class="g-type">${icon('play')}${it.duration ? fmtDur(it.duration) : esc(t('mt.video'))}</span>` : ''}
+          </div>
+          <div class="g-foot"><span>${esc(it.label ? localDigits(it.label) : (it.ext || '').toUpperCase())}${it.label && it.ext ? ' · ' + esc(it.ext.toUpperCase()) : ''}</span>
+            ${dlButton('gallery', 'i' + it.index, it.type, `data-items="${it.index}"`)}</div>
+        </div>`).join('')}
+      ${d.items.filter((i) => i.type === 'audio').map((it) => `
+        <div class="g-audio"><div class="ga-ic">${icon('music')}</div>
+          <div class="grow" style="min-width:0"><b>${esc(it.title || t('g.audioTitle'))}</b><div class="muted" style="font-size:.82rem">${esc(t('g.audioTitle'))}${it.duration ? ' · ' + fmtDur(it.duration) : ''} · ${esc((it.ext || 'mp3').toUpperCase())}</div></div>
+          ${dlButton('gallery', 'i' + it.index, 'audio', `data-items="${it.index}"`)}</div>`).join('')}
+    </div>
+    ${visual.length > 1 ? `<p class="muted" style="font-size:.8rem;margin:14px 2px 0">${icon('archive')} ${esc(t('g.zipNote'))}</p>` : ''}
+  </article>`;
+  bindGallery(d);
+  updateGallerySel();
+  updateRowButtons();
+}
+
+function updateGallerySel() {
+  const d = state.info;
+  if (!d || d.type !== 'gallery') return;
+  const visual = d.items.filter((i) => i.type !== 'audio');
+  const n = state.gsel.size;
+  $$('.g-item').forEach((el) => el.classList.toggle('selected', state.gsel.has(+el.dataset.gi)));
+  const all = $('#gAll');
+  if (all) { all.checked = n === visual.length; all.indeterminate = n > 0 && n < visual.length; }
+  $('#gCount') && ($('#gCount').textContent = t('g.selected', { n: localDigits(n) }));
+  const selBtn = $('#gSel');
+  if (selBtn) { $('#gSelLabel').textContent = t('g.dlSelected', { n: localDigits(n) }); selBtn.disabled = n === 0; }
+}
+
+function bindGallery(d) {
+  const root = $('#result');
+  $$('[data-dl]', root).forEach((btn) => btn.addEventListener('click', () => onRowDownload(btn)));
+  root.addEventListener('change', (e) => {
+    const cb = e.target.closest('[data-gsel]');
+    if (cb) { cb.checked ? state.gsel.add(+cb.dataset.gsel) : state.gsel.delete(+cb.dataset.gsel); updateGallerySel(); }
+    if (e.target.id === 'gAll') {
+      const visual = d.items.filter((i) => i.type !== 'audio');
+      state.gsel = e.target.checked ? new Set(visual.map((i) => i.index)) : new Set();
+      $$('[data-gsel]').forEach((x) => { x.checked = e.target.checked; });
+      updateGallerySel();
+    }
+  });
+  const view = (el) => openLightbox(d, +el.dataset.view);
+  root.addEventListener('click', (e) => { const m = e.target.closest('[data-view]'); if (m) view(m); });
+  root.addEventListener('keydown', (e) => { const m = e.target.closest('[data-view]'); if (m && e.key === 'Enter') view(m); });
+  $('#gSel')?.addEventListener('click', async () => {
+    const items = [...state.gsel].sort((a, b) => a - b);
+    if (!items.length) return toast(t('g.noneSel'), 'err');
+    const visual = d.items.filter((i) => i.type !== 'audio');
+    const key = items.length === visual.length ? 'gallery:all' : `gallery:${items.length === 1 ? 'i' + items[0] : 'sel' + items.join('-')}`;
+    const existing = state.jobs.get(state.rowJobs[key]);
+    if (existing && existing.status === 'finished') return saveFile(existing);
+    try {
+      const job = await submitJob({ url: state.infoUrl, kind: 'gallery', items: items.length === visual.length ? [] : items, title: d.title, thumbnail: d.thumbnail });
+      state.rowJobs[key] = job.id;
+      updateRowButtons();
+    } catch { /* toast shown */ }
+  });
+}
+
+function openLightbox(d, index) {
+  const visual = d.items.filter((i) => i.type !== 'audio');
+  let pos = Math.max(0, visual.findIndex((i) => i.index === index));
+  const draw = () => {
+    const it = visual[pos];
+    const media = it.type === 'image'
+      ? `<img src="${esc(it.full || it.preview)}" alt="${esc(it.alt || '')}">`
+      : `<div style="position:relative">${it.preview ? `<img src="${esc(it.preview)}" alt="">` : ''}<div class="max-note" style="margin-top:10px">${icon('film')}<div>${esc(t('mt.video'))}${it.duration ? ' · ' + fmtDur(it.duration) : ''}${it.label ? ' · ' + esc(it.label) : ''}</div></div></div>`;
+    openModal(`${t('g.of', { i: localDigits(pos + 1), n: localDigits(visual.length) })} · ${truncate(d.title, 50)}`, `
+      <div class="lightbox">${media}
+        <div class="lb-nav">
+          <button class="chip-btn" type="button" id="lbPrev" ${pos === 0 ? 'disabled' : ''}>${icon('chevron-left')}${esc(t('g.prev'))}</button>
+          <span class="muted">${esc(it.label ? localDigits(it.label) : '')}${it.ext ? ' · ' + esc(it.ext.toUpperCase()) : ''}</span>
+          <button class="chip-btn" type="button" id="lbNext" ${pos === visual.length - 1 ? 'disabled' : ''}>${esc(t('g.next'))}${icon('chevron-right')}</button>
+          <button class="chip-btn primary" type="button" id="lbDl">${icon('download')}${esc(t('g.dlOne'))}</button>
+        </div></div>`, {
+      wide: true,
+      onKey: (e) => {
+        if (e.key === 'ArrowLeft' && pos > 0) { pos--; draw(); return true; }
+        if (e.key === 'ArrowRight' && pos < visual.length - 1) { pos++; draw(); return true; }
+        return false;
+      },
+    });
+    $('#lbPrev')?.addEventListener('click', () => { if (pos > 0) { pos--; draw(); } });
+    $('#lbNext')?.addEventListener('click', () => { if (pos < visual.length - 1) { pos++; draw(); } });
+    $('#lbDl')?.addEventListener('click', () => {
+      const btn = document.querySelector(`[data-dl][data-quality="i${it.index}"]`);
+      closeModal();
+      if (btn) onRowDownload(btn);
+    });
+  };
+  draw();
+}
+
 /* ------------------------------------------------------------------ playlist view */
 const PRESETS = [
-  ['video:best', 'preset.vbest'], ['video:1080', 'preset.v1080'], ['video:720', 'preset.v720'], ['video:480', 'preset.v480'], ['video:360', 'preset.v360'],
+  ['video:best', 'preset.vbest'], ['video:2160', 'preset.v2160'], ['video:1080', 'preset.v1080'], ['video:720', 'preset.v720'], ['video:480', 'preset.v480'], ['video:360', 'preset.v360'],
   ['audio:mp3-320', 'preset.mp3320'], ['audio:mp3-128', 'preset.mp3128'], ['audio:m4a', 'preset.m4a'],
 ];
 function presetSelect(id, selected = 'video:720') {
-  return `<select class="select" id="${id}">${PRESETS.map(([v, k]) => `<option value="${v}" ${v === selected ? 'selected' : ''}>${esc(t(k))}</option>`).join('')}</select>`;
+  return `<select class="select" id="${id}" aria-label="Format">${PRESETS.map(([v, k]) => `<option value="${v}" ${v === selected ? 'selected' : ''}>${esc(t(k))}</option>`).join('')}</select>`;
 }
 
 function renderPlaylist(d, keep = false) {
@@ -682,9 +738,9 @@ function renderPlaylist(d, keep = false) {
   $('#result').innerHTML = `
   <article class="card pl-card">
     <div class="pl-head">
-      <div class="ph">${d.thumbnail ? `<img src="${esc(d.thumbnail)}" alt="" onerror="this.remove()">` : ''}</div>
+      <div class="ph">${d.thumbnail ? `<img src="${esc(d.thumbnail)}" alt="" data-fallback>` : ''}</div>
       <div style="min-width:0">
-        <span class="pl-kicker pf-${esc(d.platform)}">${brandIcon(d.platform)}${esc(t('pl.kicker', { p: pname(d.platform) }))}</span>
+        <div class="rc-kickers">${mtBadge('playlist')}<span class="pl-kicker pf-${esc(d.platform)}">${brandIcon(d.platform)}${esc(t('pl.kicker', { p: pname(d.platform) }))}</span></div>
         <h2>${esc(d.title)}</h2>
         <p>${[d.uploader ? esc(d.uploader) : '', esc(t('pl.count', { n: fmtNum(d.count) })), d.shown < d.count ? esc(t('pl.showing', { n: fmtNum(d.shown) })) : ''].filter(Boolean).join(' · ')}</p>
       </div>
@@ -699,7 +755,7 @@ function renderPlaylist(d, keep = false) {
       <div class="pl-item">
         <input type="checkbox" class="pl-check" data-idx="${e.index}" ${e.nested ? 'disabled' : 'checked'} aria-label="${esc(e.title)}">
         <span class="idx">${localDigits(e.index)}</span>
-        <div class="pt">${e.thumbnail ? `<img loading="lazy" src="${esc(e.thumbnail)}" alt="" onerror="this.remove()">` : ''}${e.duration ? `<span>${fmtDur(e.duration)}</span>` : ''}</div>
+        <div class="pt">${e.thumbnail ? `<img loading="lazy" decoding="async" src="${esc(e.thumbnail)}" alt="" data-fallback>` : ''}${e.duration ? `<span>${fmtDur(e.duration)}</span>` : ''}</div>
         <div class="pi"><b title="${esc(e.title)}">${esc(e.title)}</b><small>${esc(e.uploader || '')}</small></div>
         <div class="pa"><span class="pl-state hidden" data-plstate="${e.index}"></span>${e.url ? `<button class="chip-btn" type="button" data-plopen="${esc(e.url)}">${icon('eye')}${esc(t('pl.open'))}</button>` : ''}</div>
       </div>`).join('')}</div>
@@ -723,8 +779,7 @@ function renderPlaylist(d, keep = false) {
       const body = e.url
         ? { url: e.url, kind, quality, label, title: e.title, thumbnail: e.thumbnail, options: { prefer_h264: state.settings.preferH264 } }
         : { url: d.url, playlist_index: e.index, kind, quality, label, title: e.title, thumbnail: e.thumbnail, options: { prefer_h264: state.settings.preferH264 } };
-      const cid = enqueue(body);
-      state.plMap[e.index] = cid;
+      state.plMap[e.index] = enqueue(body);
     });
     toast(t('toast.addedMany', { n: fmtNum(chosen.length) }), 'ok', { action: t('toast.view'), onAction: () => openDrawer('queue') });
     updatePlaylistStates();
@@ -738,7 +793,7 @@ function updatePlaylistStates() {
   for (const [idx, ref] of Object.entries(state.plMap)) {
     const el = document.querySelector(`[data-plstate="${idx}"]`);
     if (!el) continue;
-    const realId = state.pendingMap?.[ref] || ref;
+    const realId = state.pendingMap[ref] || ref;
     const job = state.jobs.get(realId);
     const pend = state.pending.find((p) => p.cid === ref);
     el.classList.remove('hidden', 'ok', 'err');
@@ -751,8 +806,6 @@ function updatePlaylistStates() {
 }
 
 /* ------------------------------------------------------------------ job submission & client queue */
-state.pendingMap = {};
-
 async function submitJob(body, { silent = false } = {}) {
   try {
     const job = await api('/api/download', { method: 'POST', body });
@@ -800,7 +853,7 @@ async function pumpPending() {
   try {
     while (state.pending.length) {
       const active = [...state.jobs.values()].filter((j) => ACTIVE.has(j.status)).length;
-      if (active >= MAX_PARALLEL) break;
+      if (active >= maxParallel()) break;
       const item = state.pending.shift();
       try {
         const job = await submitJob(item.body, { silent: true });
@@ -828,7 +881,7 @@ async function poll() {
     try {
       const res = await api('/api/jobs?ids=' + ids.join(','));
       res.jobs.forEach(onJobUpdate);
-      res.missing.forEach((id) => { const j = state.jobs.get(id); if (j) onJobUpdate({ ...j, status: 'error', stage: 'error', error: t('err.expired'), error_code: 'expired' }); });
+      res.missing.forEach((id) => { const j = state.jobs.get(id); if (j) onJobUpdate({ ...j, status: 'error', stage: 'error', error: t('err.expired'), error_code: 'expired', retryable: true }); });
     } catch { /* network hiccup: retry next tick */ }
   }
   pumpPending();
@@ -851,6 +904,7 @@ function onJobUpdate(j) {
 
 function onJobFinished(j) {
   const meta = state.jobMeta[j.id] || (state.jobMeta[j.id] = { created: Date.now() });
+  addRecent(j);
   if (state.settings.autoSave && !meta.saved) saveFile(j, true);
   else toast(t('toast.ready', { t: truncate(j.title, 40) }), 'ok', { action: t('btn.saveFile'), onAction: () => saveFile(j) });
   if (state.settings.notify && document.hidden && 'Notification' in window && Notification.permission === 'granted') {
@@ -860,48 +914,58 @@ function onJobFinished(j) {
 
 function saveFile(j, auto = false) {
   if (!j?.file_url) return;
-  const a = document.createElement('a');
-  a.href = j.file_url;
-  a.download = j.filename || '';
-  a.rel = 'noopener';
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
+  saveUrl(j.file_url, j.filename || '');
   const meta = state.jobMeta[j.id] || (state.jobMeta[j.id] = { created: Date.now() });
   meta.saved = true;
   persistJobs();
   toast(auto ? t('toast.autoSaved', { t: truncate(j.title, 40) }) : t('toast.saving'), 'ok');
 }
 
-async function cancelJob(id) {
-  try { await api(`/api/jobs/${id}`, { method: 'DELETE' }); } catch { /* already gone */ }
-  const j = state.jobs.get(id);
-  if (j && ACTIVE.has(j.status)) onJobUpdate({ ...j, status: 'cancelled', stage: 'cancelled' });
+async function jobAction(id, action) {
+  try {
+    const j = await api(`/api/jobs/${id}/${action}`, { method: 'POST' });
+    onJobUpdate(j);
+    if (action === 'pause') toast(t('toast.paused'), 'info', { timeout: 1800 });
+    if (action === 'resume' || action === 'retry') ensurePolling();
+    if (action === 'resume') toast(t('toast.resumed'), 'ok', { timeout: 1800 });
+    // a pause request is acknowledged right away but takes effect within a second
+    if (action === 'pause') setTimeout(async () => { try { onJobUpdate(await api(`/api/jobs/${id}`)); } catch { /* gone */ } }, 1200);
+    return j;
+  } catch (e) {
+    if (e.status === 404 && action === 'retry') return resubmit(id);
+    toast(e.message, 'err');
+    return null;
+  }
 }
-async function removeJob(id) {
+const cancelJob = (id) => jobAction(id, 'cancel');
+const pauseJob = (id) => jobAction(id, 'pause');
+const resumeJob = (id) => jobAction(id, 'resume');
+const retryJob = (id) => jobAction(id, 'retry');
+
+function resubmit(id) {
+  const meta = state.jobMeta[id];
   const j = state.jobs.get(id);
-  if (j && ACTIVE.has(j.status)) await cancelJob(id);
-  else api(`/api/jobs/${id}`, { method: 'DELETE' }).catch(() => {});
+  const body = meta?.req || (j && { url: j.url, kind: j.kind, quality: j.quality, label: j.label, title: j.title, thumbnail: j.thumbnail });
+  if (!body) return null;
+  state.jobs.delete(id);
+  delete state.jobMeta[id];
+  return submitJob(body).then((nj) => {
+    for (const [k, v] of Object.entries(state.rowJobs)) if (v === id) state.rowJobs[k] = nj.id;
+    for (const [k, v] of Object.entries(state.plMap)) if (v === id || state.pendingMap[v] === id) state.plMap[k] = nj.id;
+    updateRowButtons();
+    updatePlaylistStates();
+    renderQueue();
+    return nj;
+  }).catch(() => { renderQueue(); return null; });
+}
+
+async function removeJob(id) {
+  api(`/api/jobs/${id}`, { method: 'DELETE' }).catch(() => {});
   state.jobs.delete(id);
   delete state.jobMeta[id];
   persistJobs();
   renderQueue();
   updateBadge();
-}
-function retryJob(id) {
-  const meta = state.jobMeta[id];
-  const j = state.jobs.get(id);
-  const body = meta?.req || (j && { url: j.url, kind: j.kind, quality: j.quality, label: j.label, title: j.title, thumbnail: j.thumbnail });
-  if (!body) return;
-  state.jobs.delete(id);
-  delete state.jobMeta[id];
-  submitJob(body).then((nj) => {
-    for (const [k, v] of Object.entries(state.rowJobs)) if (v === id) state.rowJobs[k] = nj.id;
-    for (const [k, v] of Object.entries(state.plMap)) if (v === id || state.pendingMap[v] === id) state.plMap[k] = nj.id;
-    updateRowButtons();
-    updatePlaylistStates();
-  }).catch(() => {});
-  renderQueue();
 }
 
 function updateBadge() {
@@ -917,11 +981,11 @@ function updateBadge() {
   dq.classList.toggle('hidden', state.jobs.size + state.pending.length === 0);
 }
 function pulseQueue() {
-  const b = $('#queueBtn');
-  b.animate([{ transform: 'scale(1)' }, { transform: 'scale(1.18)' }, { transform: 'scale(1)' }], { duration: 450, easing: 'ease-out' });
+  if (motionReduced()) return;
+  $('#queueBtn').animate([{ transform: 'scale(1)' }, { transform: 'scale(1.18)' }, { transform: 'scale(1)' }], { duration: 450, easing: 'ease-out' });
 }
 
-/* ------------------------------------------------------------------ drawer: queue */
+/* ------------------------------------------------------------------ drawer: download manager */
 function openDrawer(tab = 'queue') {
   switchDrawerTab(tab);
   $('#drawer').classList.add('open');
@@ -933,42 +997,70 @@ function closeDrawer() {
   $('#drawer').setAttribute('aria-hidden', 'true');
   $('#backdrop').classList.remove('show');
 }
+const drawerOpen = () => $('#drawer').classList.contains('open');
 function switchDrawerTab(tab) {
   $$('.drawer-tab').forEach((b) => b.classList.toggle('active', b.dataset.dtab === tab));
   $$('[data-dpanel]').forEach((p) => p.classList.toggle('hidden', p.dataset.dpanel !== tab));
   if (tab === 'settings') { renderSettings(); refreshHealth(); }
+  if (tab === 'history') renderHistory();
 }
 
 function stageText(j) {
   if (j.status === 'queued') return j.queue_position ? t('q.position', { n: localDigits(j.queue_position) }) : t('stage.queued');
   if (j.status === 'finished') return `${t('stage.finished')} · ${fmtBytes(j.filesize)}`;
   if (j.status === 'error') return t('stage.error');
+  if (j.status === 'paused') return t('stage.paused');
   return t('stage.' + (j.stage || j.status));
 }
 
+function mediaChips(j) {
+  const m = j.media || {};
+  const chips = [];
+  if (j.kind === 'gallery') {
+    if (m.items > 1) chips.push(`<span class="hi">${esc(t('q.files', { n: localDigits(m.items) }))}</span>`);
+    if (m.width) chips.push(`<span class="hi">${esc(localDigits(`${m.width}×${m.height}`))}</span>`, `<span>${esc(m.format || '')}</span>`);
+  } else if (m.width) {
+    chips.push(`<span class="hi">${esc(localDigits(`${m.res}p`))}</span>`, `<span>${esc(localDigits(`${m.width}×${m.height}`))}</span>`);
+    if (m.vcodec) chips.push(`<span>${esc(m.vcodec)}</span>`);
+    if (m.fps) chips.push(`<span>${esc(localDigits(Math.round(m.fps)))}fps</span>`);
+    if (m.hdr) chips.push('<span>HDR</span>');
+  }
+  if (m.acodec && j.kind !== 'gallery') chips.push(`<span>${esc(m.acodec)}${m.audio_bitrate ? ' ' + localDigits(Math.round(m.audio_bitrate / 1000)) + 'k' : ''}</span>`);
+  if (m.container && j.kind !== 'gallery') chips.push(`<span>${esc(m.container.toUpperCase().replace('MOV', 'MP4'))}</span>`);
+  return chips.length ? `<div class="q-media" title="${esc(t('q.output'))}">${chips.join('')}</div>` : '';
+}
+
 function queueItemHtml(j) {
-  const kindIcon = j.kind === 'audio' ? 'music' : 'film';
-  const indet = (j.status !== 'downloading' && j.status !== 'finished') || (j.status === 'downloading' && !j.progress);
+  const kindIcon = j.kind === 'audio' ? 'music' : j.kind === 'gallery' ? 'images' : 'film';
+  const running = j.status === 'downloading' || j.status === 'preparing' || j.status === 'processing';
+  const indet = (j.status !== 'downloading' && j.status !== 'finished' && j.status !== 'paused') || (j.status === 'downloading' && !j.progress);
   const pct = j.status === 'finished' ? 100 : j.progress || 0;
-  const left = j.status === 'downloading' ? `${localDigits(Math.floor(pct))}% · ${fmtBytes(j.downloaded)}${j.total ? ' / ' + fmtBytes(j.total) : ''}` : '';
-  const right = j.status === 'downloading' ? [j.speed ? fmtBytes(j.speed) + '/s' : '', j.eta != null ? t('q.eta', { t: fmtDur(j.eta) }) : ''].filter(Boolean).join(' · ') : '';
+  const left = (j.status === 'downloading' || j.status === 'paused') && (j.downloaded || pct)
+    ? `${localDigits(Math.floor(pct))}%${j.downloaded ? ' · ' + fmtBytes(j.downloaded) : ''}${j.total ? ' / ' + fmtBytes(j.total) : ''}` : '';
+  const right = j.status === 'downloading' ? [fmtSpeed(j.speed), j.eta != null ? t('q.eta', { t: fmtDur(j.eta) }) : ''].filter(Boolean).join(' · ') : '';
   const expires = j.expires ? Math.max(0, Math.round((j.expires * 1000 - Date.now()) / 60000)) : null;
   let actions = '';
-  if (ACTIVE.has(j.status)) actions = `<button class="chip-btn danger" data-qa="cancel">${icon('x')}${esc(t('q.cancel'))}</button>`;
-  else if (j.status === 'finished') actions = `<button class="chip-btn primary" data-qa="save">${icon('save')}${esc(t('btn.saveFile'))}</button><button class="chip-btn" data-qa="preview">${icon('play')}${esc(t('q.preview'))}</button><button class="chip-btn danger" data-qa="remove">${icon('trash')}</button>`;
-  else actions = `<button class="chip-btn" data-qa="retry">${icon('refresh')}${esc(t('btn.retry'))}</button><button class="chip-btn danger" data-qa="remove">${icon('trash')}</button>`;
+  if (j.pausable && running) actions += `<button class="chip-btn" data-qa="pause">${icon('pause')}${esc(t('q.pause'))}</button>`;
+  if (j.status === 'paused') actions += `<button class="chip-btn primary" data-qa="resume">${icon('play')}${esc(t('q.resume'))}</button>`;
+  if (ACTIVE.has(j.status) || j.status === 'paused') actions += `<button class="chip-btn danger" data-qa="cancel">${icon('x')}${esc(t('q.cancel'))}</button>`;
+  else if (j.status === 'finished') actions += `<button class="chip-btn primary" data-qa="save">${icon('save')}${esc(t('btn.saveFile'))}</button>${j.kind !== 'gallery' ? `<button class="chip-btn" data-qa="preview">${icon('play')}${esc(t('q.preview'))}</button>` : ''}<button class="chip-btn danger" data-qa="remove" aria-label="Remove">${icon('trash')}</button>`;
+  else actions += `<button class="chip-btn" data-qa="retry">${icon('refresh')}${esc(t('btn.retry'))}</button><button class="chip-btn danger" data-qa="remove" aria-label="Remove">${icon('trash')}</button>`;
   return `
-    <div class="q-thumb">${j.thumbnail ? `<img src="${esc(j.thumbnail)}" alt="" onerror="this.remove()">` : icon(kindIcon)}<span class="qk pf-${esc(j.platform)}">${brandIcon(j.platform)}</span></div>
+    <div class="q-thumb">${j.thumbnail ? `<img src="${esc(j.thumbnail)}" alt="" loading="lazy" data-fallback>` : icon(kindIcon)}<span class="qk pf-${esc(j.platform)}">${brandIcon(j.platform)}</span></div>
     <div class="q-body">
       <div class="q-title" title="${esc(j.title || j.url)}">${esc(j.title || j.url)}</div>
-      <div class="q-meta"><span class="q-tag">${esc(j.label || j.quality)}</span><span class="q-stage ${j.status === 'finished' ? 'ok' : j.status === 'error' ? 'err' : ''}">${esc(stageText(j))}</span></div>
+      <div class="q-meta"><span class="q-tag">${esc(j.label || j.quality)}</span><span class="q-stage ${j.status === 'finished' ? 'ok' : j.status === 'error' ? 'err' : ''}"><span class="st-dot"></span>${esc(stageText(j))}</span></div>
       ${j.status === 'error' ? `<div class="q-err">${esc(j.error)}</div>` : j.status === 'cancelled' ? '' : `<div class="progress ${indet ? 'indeterminate' : ''} ${j.status === 'finished' ? 'done' : ''}"><div class="bar" style="width:${pct}%"></div></div>`}
       ${left || right ? `<div class="q-sub"><span>${esc(left)}</span><span>${esc(right)}</span></div>` : ''}
+      ${j.status === 'paused' ? `<div class="q-sub"><span>${esc(t('q.pausedNote'))}</span></div>` : ''}
+      ${j.status === 'finished' ? mediaChips(j) : ''}
+      ${j.warning ? `<div class="q-warn">${icon('alert')} ${esc(j.warning)}</div>` : ''}
       ${j.status === 'finished' && expires != null ? `<div class="q-sub"><span>${esc(j.filename)}</span><span>${esc(t('q.expires', { m: localDigits(expires) }))}</span></div>` : ''}
       <div class="q-actions">${actions}</div>
     </div>`;
 }
 
+const renderedIds = new Set();  // only newly added items animate in (no flicker on re-render)
 function renderQueue() {
   const panel = $('#queuePanel');
   const jobs = [...state.jobs.values()].sort((a, b) => b.created - a.created);
@@ -978,36 +1070,48 @@ function renderQueue() {
   }
   const finished = jobs.filter((j) => j.status === 'finished');
   const unsaved = finished.filter((j) => !state.jobMeta[j.id]?.saved);
+  const pausable = jobs.filter((j) => j.pausable && j.status !== 'queued');
+  const paused = jobs.filter((j) => j.status === 'paused');
+  const failed = jobs.filter((j) => j.status === 'error' || j.status === 'cancelled');
   panel.innerHTML = `
     <div class="drawer-tools">
       <span>${esc(t('q.summary', { a: localDigits(jobs.filter((j) => ACTIVE.has(j.status)).length + state.pending.length), d: localDigits(finished.length) }))}</span>
-      <span style="display:flex;gap:6px">
+      <span style="display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end">
+        ${pausable.length > 1 ? `<button class="chip-btn" id="pauseAll">${icon('pause')}${esc(t('q.ctrlAll'))}</button>` : ''}
+        ${paused.length > 1 ? `<button class="chip-btn" id="resumeAll">${icon('play')}${esc(t('q.resumeAll'))}</button>` : ''}
+        ${failed.length > 1 ? `<button class="chip-btn" id="retryAll">${icon('refresh')}${esc(t('q.retryAll'))}</button>` : ''}
         ${unsaved.length > 1 ? `<button class="chip-btn" id="saveAll">${icon('save')}${esc(t('q.saveAll'))}</button>` : ''}
         <button class="chip-btn" id="clearDone">${icon('trash')}${esc(t('q.clear'))}</button>
       </span>
     </div>
+    <p class="muted" style="font-size:.76rem;margin:0 2px 10px">${esc(t('q.parallelInfo', { n: localDigits(maxParallel()) }))}</p>
     <div class="q-list">
-      ${state.pending.map((p) => `<div class="q-item" data-pid="${p.cid}">
-        <div class="q-thumb">${p.thumbnail ? `<img src="${esc(p.thumbnail)}" alt="" onerror="this.remove()">` : icon('clock')}</div>
+      ${state.pending.map((p) => `<div class="q-item st-queued" data-pid="${p.cid}">
+        <div class="q-thumb">${p.thumbnail ? `<img src="${esc(p.thumbnail)}" alt="" data-fallback>` : icon('clock')}</div>
         <div class="q-body"><div class="q-title">${esc(p.title)}</div>
-          <div class="q-meta"><span class="q-tag">${esc(p.body.label || p.body.quality)}</span><span class="q-stage">${esc(t('stage.waiting'))}</span></div>
+          <div class="q-meta"><span class="q-tag">${esc(p.body.label || p.body.quality)}</span><span class="q-stage"><span class="st-dot"></span>${esc(t('stage.waiting'))}</span></div>
           <div class="q-actions"><button class="chip-btn danger" data-pa="${p.cid}">${icon('x')}${esc(t('q.cancel'))}</button></div></div></div>`).join('')}
-      ${jobs.map((j) => `<div class="q-item st-${j.status}" data-qid="${j.id}">${queueItemHtml(j)}</div>`).join('')}
+      ${jobs.map((j) => `<div class="q-item st-${j.status}${renderedIds.has(j.id) ? '' : ' enter'}" data-qid="${j.id}">${queueItemHtml(j)}</div>`).join('')}
     </div>`;
+  jobs.forEach((j) => renderedIds.add(j.id));
   $('#clearDone')?.addEventListener('click', () => {
-    for (const j of [...state.jobs.values()]) if (!ACTIVE.has(j.status)) { state.jobs.delete(j.id); delete state.jobMeta[j.id]; }
+    for (const j of [...state.jobs.values()]) if (!ACTIVE.has(j.status) && j.status !== 'paused') { state.jobs.delete(j.id); delete state.jobMeta[j.id]; }
     persistJobs(); renderQueue(); updateBadge();
   });
   $('#saveAll')?.addEventListener('click', async () => { for (const j of unsaved) { saveFile(j); await sleep(700); } renderQueue(); });
+  $('#pauseAll')?.addEventListener('click', () => pausable.forEach((j) => pauseJob(j.id)));
+  $('#resumeAll')?.addEventListener('click', () => paused.forEach((j) => resumeJob(j.id)));
+  $('#retryAll')?.addEventListener('click', () => failed.forEach((j) => retryJob(j.id)));
 }
 
 function renderQueueItem(j) {
   const el = document.querySelector(`[data-qid="${j.id}"]`);
   if (!el) return renderQueue();
-  const wasFinal = !ACTIVE.has(j.status);
-  el.className = `q-item st-${j.status}`;
+  const cls = `q-item st-${j.status}`;
+  const statusChanged = !el.classList.contains(`st-${j.status}`);
+  el.className = cls;
   el.innerHTML = queueItemHtml(j);
-  if (wasFinal) renderQueue();
+  if (statusChanged && !ACTIVE.has(j.status)) renderQueue();
 }
 
 function onQueueClick(e) {
@@ -1023,41 +1127,68 @@ function onQueueClick(e) {
   if (!j) return;
   const a = btn.dataset.qa;
   if (a === 'cancel') cancelJob(id);
+  else if (a === 'pause') pauseJob(id);
+  else if (a === 'resume') resumeJob(id);
   else if (a === 'remove') removeJob(id);
   else if (a === 'retry') retryJob(id);
   else if (a === 'save') { saveFile(j); renderQueue(); }
   else if (a === 'preview') {
     const src = `${j.file_url}?inline=1`;
-    openModal(j.title, j.kind === 'audio' ? `<audio src="${esc(src)}" controls autoplay></audio>` : `<video src="${esc(src)}" controls autoplay playsinline></video>`);
+    openModal(j.title, j.kind === 'audio' ? `<audio src="${esc(src)}" controls autoplay></audio>` : `<video src="${esc(src)}" controls autoplay playsinline></video>`, { wide: true });
   }
 }
 
-/* ------------------------------------------------------------------ history */
+/* ------------------------------------------------------------------ history: recent files + opened links */
 function addHistory(d, url) {
-  const item = { url, title: d.title, platform: d.platform, thumb: d.thumbnail, type: d.type, ts: Date.now() };
+  if (!state.settings.keepHistory) return;
+  const item = { url, title: d.title, platform: d.platform, thumb: d.thumbnail, type: d.type, mt: d.media_type, ts: Date.now() };
   state.history = [item, ...state.history.filter((h) => h.url !== url)].slice(0, 40);
   store.set('history', state.history);
-  renderHistory();
+}
+function addRecent(j) {
+  if (!state.settings.keepHistory) return;
+  const req = state.jobMeta[j.id]?.req;
+  const item = { id: j.id, title: j.title, platform: j.platform, kind: j.kind, label: j.label, filename: j.filename, size: j.filesize,
+    thumb: j.thumbnail, ts: Date.now(), expires: j.expires ? j.expires * 1000 : null, req };
+  state.recent = [item, ...state.recent.filter((r) => r.id !== j.id)].slice(0, 50);
+  store.set('recent', state.recent);
 }
 function renderHistory() {
   const panel = $('#historyPanel');
-  if (!state.history.length) {
+  if (!state.history.length && !state.recent.length) {
     panel.innerHTML = `<div class="drawer-empty"><div class="de-icon">${icon('clock')}</div><b>${esc(t('h.emptyTitle'))}</b><p>${esc(t('h.empty'))}</p></div>`;
     return;
   }
+  const now = Date.now();
   panel.innerHTML = `
-    <div class="drawer-tools"><span>${esc(t('h.count', { n: localDigits(state.history.length) }))}</span><button class="chip-btn" id="clearHist">${icon('trash')}${esc(t('h.clear'))}</button></div>
+    <div class="drawer-tools"><span>${esc(t('h.recent'))}</span>${state.recent.length ? `<button class="chip-btn" id="clearRecent">${icon('trash')}${esc(t('h.clearRecent'))}</button>` : ''}</div>
+    <div class="q-list recent-list">${state.recent.length ? state.recent.map((r, i) => {
+      const live = r.expires && r.expires > now && state.jobs.get(r.id)?.status === 'finished';
+      return `<div class="h-item" data-ri="${i}">
+        <div class="ht pf-${esc(r.platform)}">${r.thumb ? `<img src="${esc(r.thumb)}" alt="" loading="lazy" data-fallback>` : brandIcon(r.platform)}</div>
+        <div style="min-width:0"><b>${esc(r.filename || r.title)}</b><small>${esc(r.label || '')} · ${esc(fmtBytes(r.size))} · ${esc(timeAgo(r.ts))}${live ? '' : ' · ' + esc(t('h.expired'))}</small></div>
+        <button class="chip-btn ${live ? 'primary' : ''}" type="button" data-rsave="${i}">${icon(live ? 'save' : 'refresh')}${esc(live ? t('h.saveAgain') : t('h.again'))}</button>
+      </div>`;
+    }).join('') : `<p class="muted" style="font-size:.84rem;margin:4px 2px 12px">${esc(t('h.recentEmpty'))}</p>`}</div>
+    <div class="drawer-tools" style="margin-top:14px"><span>${esc(t('h.links'))} · ${esc(localDigits(state.history.length))}</span>${state.history.length ? `<button class="chip-btn" id="clearHist">${icon('trash')}${esc(t('h.clear'))}</button>` : ''}</div>
     <div class="q-list">${state.history.map((h, i) => `
       <div class="h-item" data-hi="${i}" role="button" tabindex="0">
-        <div class="ht pf-${esc(h.platform)}">${h.thumb ? `<img src="${esc(h.thumb)}" alt="" onerror="this.remove()">` : ''}${h.thumb ? '' : brandIcon(h.platform)}</div>
-        <div style="min-width:0"><b>${esc(h.title)}</b><small>${esc(pname(h.platform))}${h.type === 'playlist' ? ' · ' + esc(t('h.playlist')) : ''} · ${esc(timeAgo(h.ts))}</small></div>
+        <div class="ht pf-${esc(h.platform)}">${h.thumb ? `<img src="${esc(h.thumb)}" alt="" loading="lazy" data-fallback>` : brandIcon(h.platform)}</div>
+        <div style="min-width:0"><b>${esc(h.title)}</b><small>${esc(pname(h.platform))}${h.mt ? ' · ' + esc(t('mt.' + h.mt)) : ''} · ${esc(timeAgo(h.ts))}</small></div>
         <span class="chip-btn">${icon('arrow-right')}</span>
       </div>`).join('')}</div>`;
-  $('#clearHist').onclick = () => { state.history = []; store.set('history', []); renderHistory(); };
-  $$('[data-hi]', panel).forEach((el) => el.addEventListener('click', () => {
-    const h = state.history[+el.dataset.hi];
-    closeDrawer();
-    fetchInfo(h.url, { playlist: h.type === 'playlist' });
+  $('#clearHist')?.addEventListener('click', () => { state.history = []; store.set('history', []); renderHistory(); });
+  $('#clearRecent')?.addEventListener('click', () => { state.recent = []; store.set('recent', []); renderHistory(); });
+  $$('[data-hi]', panel).forEach((el) => {
+    const go = () => { const h = state.history[+el.dataset.hi]; closeDrawer(); fetchInfo(h.url, { playlist: h.type === 'playlist' }); };
+    el.addEventListener('click', go);
+    el.addEventListener('keydown', (e) => { if (e.key === 'Enter') go(); });
+  });
+  $$('[data-rsave]', panel).forEach((b) => b.addEventListener('click', () => {
+    const r = state.recent[+b.dataset.rsave];
+    const j = state.jobs.get(r.id);
+    if (j && j.status === 'finished' && r.expires > Date.now()) return saveFile(j);
+    if (r.req) submitJob(r.req).then(() => openDrawer('queue')).catch(() => {});
   }));
 }
 
@@ -1068,43 +1199,85 @@ function renderSettings() {
     <div class="set-row"><div class="st"><b>${esc(title)}</b><small>${esc(desc)}</small></div>
     <label class="switch"><input type="checkbox" data-set="${key}" ${s[key] ? 'checked' : ''}><span class="track"></span></label></div>`;
   const h = state.health;
+  const pref = themePref(), ak = accentKey(), bg = bgPref();
   $('#settingsPanel').innerHTML = `
     <div class="settings">
+      <div class="set-section">${esc(t('s.secDownloads'))}</div>
       ${row('autoSave', t('s.autoSave'), t('s.autoSaveD'))}
       ${row('autoFetch', t('s.autoFetch'), t('s.autoFetchD'))}
       ${row('preferH264', t('s.h264'), t('s.h264D'))}
+      ${row('clipboard', t('s.clipboard'), t('s.clipboardD'))}
       ${row('notify', t('s.notify'), t('s.notifyD'))}
-      <div class="set-row"><div class="st"><b>${esc(t('s.theme'))}</b><small>${esc(t('s.themeD'))}</small></div>
-        <button class="chip-btn" id="setTheme">${icon(state.theme === 'dark' ? 'sun' : 'moon')}${esc(state.theme === 'dark' ? t('s.light') : t('s.dark'))}</button></div>
+      <div class="set-row"><div class="st"><b>${esc(t('s.parallel'))}</b><small>${esc(t('s.parallelD'))}</small></div>
+        <select class="select" id="setParallel" style="width:auto" aria-label="${esc(t('s.parallel'))}">${[1, 2, 3, 4, 5].map((n) => `<option value="${n}" ${n === maxParallel() ? 'selected' : ''}>${localDigits(n)}</option>`).join('')}</select></div>
+
+      <div class="set-section">${esc(t('s.secAppearance'))}</div>
+      <div class="theme-opts">${THEMES.map((k) => `<button type="button" class="theme-opt ${k === pref ? 'on' : ''}" data-st-theme="${k}" aria-pressed="${k === pref}"><span class="sw sw-${k}"></span>${esc(t('theme.' + k))}</button>`).join('')}</div>
+      <div class="set-row" style="flex-wrap:wrap"><div class="st"><b>${esc(t('theme.accent'))}</b></div>
+        <div class="swatches">${Object.entries(ACCENTS).map(([k, c]) => `<button type="button" class="swatch ${k === ak ? 'on' : ''}" title="${esc(t('acc.' + k))}" aria-label="${esc(t('acc.' + k))}" data-st-accent="${k}" style="background:linear-gradient(135deg,${c[0]},${c[1]},${c[2]})"></button>`).join('')}
+          <label class="swatch custom ${ak === 'custom' ? 'on' : ''}" title="${esc(t('theme.custom'))}"><input type="color" id="setAccentCustom" value="${esc(store.raw('accentCustom') || '#8b5cf6')}" aria-label="${esc(t('theme.custom'))}"></label></div></div>
+      <div class="set-row" style="flex-wrap:wrap"><div class="st"><b>${esc(t('theme.bg'))}</b><small>${esc(bg === 'image' ? t('bg.pick') : '')}</small></div>
+        <div class="fav-list">${BACKGROUNDS.map((k) => `<button type="button" class="chip-btn ${k === bg ? 'active' : ''}" data-st-bg="${k}">${esc(t('bg.' + k))}</button>`).join('')}</div>
+        <input type="file" accept="image/*" id="setBgFile" hidden></div>
+      <div class="set-row"><div class="st"><b>${esc(t('theme.motion'))}</b><small>${esc(t('theme.motionD'))}</small></div>
+        <label class="switch"><input type="checkbox" id="setMotion" ${motionReduced() ? 'checked' : ''}><span class="track"></span></label></div>
       <div class="set-row"><div class="st"><b>${esc(t('s.lang'))}</b><small>English / বাংলা</small></div>
-        <button class="chip-btn" id="setLang">${icon('globe')}${state.lang === 'bn' ? 'English' : 'বাংলা'}</button></div>
+        <button class="chip-btn" id="setLang">${icon('globe')}${ui.lang === 'bn' ? 'English' : 'বাংলা'}</button></div>
+
+      <div class="set-section">${esc(t('fav.title'))}</div>
+      <p class="muted" style="font-size:.8rem;margin:0 2px 8px">${esc(t('fav.hint'))}</p>
+      <div class="fav-list">${PLATFORM_CARDS.map((p) => `<button type="button" class="pchip ${(s.favorites || []).includes(p) ? 'is-fav' : ''}" data-st-fav="${p}"><span class="pdot pf-${p}">${brandIcon(p)}</span>${esc(pname(p))}<span class="fav">★</span></button>`).join('')}</div>
+
+      <div class="set-section">${esc(t('s.secPrivacy'))}</div>
+      ${row('keepHistory', t('s.historyKeep'), t('s.historyKeepD'))}
+      <button class="btn btn-ghost" id="resetAll" style="margin-top:6px">${icon('trash')}${esc(t('s.reset'))}</button>
+
+      <div class="set-section">${esc(t('s.secHelp'))}</div>
+      <div class="set-row"><div class="st"><b>${esc(t('s.shortcuts'))}</b><small>${esc(t('s.shortcutsD'))}</small></div>
+        <button class="chip-btn" id="setKeys">${icon('keyboard')}${esc(t('s.open'))}</button></div>
       ${h ? `<div class="stats-mini">
         <div><b>${esc(localDigits(h.stats.completed))}</b><small>${esc(t('s.statDone'))}</small></div>
         <div><b>${esc(fmtBytes(h.stats.bytes))}</b><small>${esc(t('s.statData'))}</small></div>
         <div><b>${esc(localDigits((h.jobs.downloading || 0) + (h.jobs.processing || 0) + (h.jobs.queued || 0)))}</b><small>${esc(t('s.statActive'))}</small></div>
       </div>
       <p style="color:var(--muted);font-size:.78rem;margin:4px 2px">${esc(t('s.server', { v: h.version, y: h.yt_dlp, f: h.ffmpeg ? '✓' : '✗' }))}</p>` : ''}
-      <button class="btn btn-ghost" id="resetAll" style="margin-top:6px">${icon('trash')}${esc(t('s.reset'))}</button>
     </div>`;
-  $$('[data-set]').forEach((el) => el.addEventListener('change', async () => {
+  const panel = $('#settingsPanel');
+  $$('[data-set]', panel).forEach((el) => el.addEventListener('change', async () => {
     const k = el.dataset.set;
     if (k === 'notify' && el.checked && 'Notification' in window && Notification.permission !== 'granted') {
       const perm = await Notification.requestPermission().catch(() => 'denied');
       if (perm !== 'granted') { el.checked = false; toast(t('err.notify'), 'err'); return; }
     }
+    if (k === 'clipboard' && el.checked) {
+      try { await navigator.clipboard.readText(); } catch { el.checked = false; toast(t('err.clipDenied'), 'err'); return; }
+    }
     state.settings[k] = el.checked;
-    store.set('settings', state.settings);
+    saveSettings();
     if (k === 'preferH264' && $('#preferH264')) $('#preferH264').checked = el.checked;
   }));
-  $('#setTheme').onclick = () => { applyTheme(state.theme === 'dark' ? 'light' : 'dark'); renderSettings(); };
-  $('#setLang').onclick = () => setLang(state.lang === 'bn' ? 'en' : 'bn');
+  $('#setParallel').addEventListener('change', (e) => { state.settings.parallel = +e.target.value; saveSettings(); pumpPending(); });
+  $('#setAccentCustom').addEventListener('input', (e) => setAccent(e.target.value));
+  $('#setAccentCustom').addEventListener('change', () => renderSettings());
+  $('#setBgFile').addEventListener('change', async (e) => { if (e.target.files[0]) { await setBgImage(e.target.files[0]); renderSettings(); } });
+  $('#setMotion').addEventListener('change', (e) => setMotion(e.target.checked));
+  $('#setLang').onclick = () => setLang(ui.lang === 'bn' ? 'en' : 'bn');
+  $('#setKeys').onclick = showShortcuts;
   $('#resetAll').onclick = () => {
-    ['jobs', 'history', 'settings'].forEach((k) => localStorage.removeItem('mg.' + k));
-    state.history = []; state.jobMeta = {}; state.jobs.clear(); state.pending = [];
-    state.settings = { autoSave: true, autoFetch: true, notify: false, preferH264: true };
-    renderQueue(); renderHistory(); renderSettings(); updateBadge();
+    ['jobs', 'history', 'recent', 'settings', 'clipLast'].forEach((k) => localStorage.removeItem('mg.' + k));
+    state.history = []; state.recent = []; state.jobMeta = {}; state.jobs.clear(); state.pending = [];
+    state.settings = { ...DEFAULT_SETTINGS };
+    renderQueue(); renderHistory(); renderSettings(); updateBadge(); renderChips();
     toast(t('toast.reset'), 'ok');
   };
+}
+
+async function onSettingsClick(e) {
+  const th = e.target.closest('[data-st-theme]'), ac = e.target.closest('[data-st-accent]'), bgb = e.target.closest('[data-st-bg]'), fv = e.target.closest('[data-st-fav]');
+  if (th) { setTheme(th.dataset.stTheme); renderSettings(); }
+  else if (ac) { setAccent(ac.dataset.stAccent); renderSettings(); }
+  else if (bgb) { if (bgb.dataset.stBg === 'image') $('#setBgFile').click(); else { await setBg(bgb.dataset.stBg); renderSettings(); } }
+  else if (fv) toggleFavorite(fv.dataset.stFav);
 }
 
 async function refreshHealth() {
@@ -1113,20 +1286,6 @@ async function refreshHealth() {
     $('#footerVersion').textContent = `v${state.health.version} · yt-dlp ${state.health.yt_dlp}`;
     if (!$('#settingsPanel').classList.contains('hidden')) renderSettings();
   } catch { /* offline */ }
-}
-
-/* ------------------------------------------------------------------ modal */
-function openModal(title, mediaHtml) {
-  const m = $('#modal');
-  m.innerHTML = `<div class="modal-box"><div class="modal-head"><b>${esc(title)}</b><button class="icon-btn" id="modalClose" aria-label="Close">${icon('x')}</button></div><div class="modal-media">${mediaHtml}</div></div>`;
-  m.classList.remove('hidden');
-  $('#modalClose').onclick = closeModal;
-}
-function closeModal() {
-  const m = $('#modal');
-  m.querySelectorAll('video,audio').forEach((v) => v.pause());
-  m.innerHTML = '';
-  m.classList.add('hidden');
 }
 
 /* ------------------------------------------------------------------ restore jobs after reload */
@@ -1144,32 +1303,17 @@ async function restoreJobs() {
   } catch { /* ignore */ }
 }
 
-/* ------------------------------------------------------------------ PWA */
-function setupPWA() {
-  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) {
-    navigator.serviceWorker.register('/sw.js').catch(() => {});
-  }
-  window.addEventListener('beforeinstallprompt', (e) => {
-    e.preventDefault();
-    state.installPrompt = e;
-    $('#installBtn').classList.remove('hidden');
-  });
-  const install = async () => {
-    if (state.installPrompt) {
-      state.installPrompt.prompt();
-      await state.installPrompt.userChoice.catch(() => {});
-      state.installPrompt = null;
-      $('#installBtn').classList.add('hidden');
-    } else {
-      toast(/iphone|ipad|ipod/i.test(navigator.userAgent) ? t('pwa.ios') : t('pwa.manual'), 'info', { timeout: 7000 });
-    }
-  };
-  $('#installBtn').addEventListener('click', install);
-  $('#installBtn2').addEventListener('click', install);
-  window.addEventListener('appinstalled', () => toast(t('pwa.done'), 'ok'));
+/* ------------------------------------------------------------------ events */
+function onKey(e) {
+  const k = e.key.toLowerCase();
+  if (k === 'd') { drawerOpen() && $('.drawer-tab.active')?.dataset.dtab === 'queue' ? closeDrawer() : openDrawer('queue'); return true; }
+  if (k === 'h') { openDrawer('history'); return true; }
+  if (k === 's') { openDrawer('settings'); return true; }
+  if (k === 'a' && state.info?.type === 'gallery' && $('#gAll')) { $('#gAll').click(); return true; }
+  if (e.key === '/') { e.preventDefault(); setMode('single'); input().focus(); return true; }
+  return false;
 }
 
-/* ------------------------------------------------------------------ events */
 function bindEvents() {
   $('#urlForm').addEventListener('submit', (e) => { e.preventDefault(); fetchInfo(input().value); });
   input().addEventListener('input', updatePlatformBadge);
@@ -1195,6 +1339,8 @@ function bindEvents() {
     openDrawer('queue');
   });
   $('#platformChips').addEventListener('click', (e) => {
+    const fav = e.target.closest('[data-fav]');
+    if (fav) { e.preventDefault(); e.stopPropagation(); toggleFavorite(fav.dataset.fav); return; }
     const chip = e.target.closest('[data-chip]');
     if (!chip) return;
     setMode('single');
@@ -1202,14 +1348,12 @@ function bindEvents() {
     input().focus();
   });
 
-  $('#themeBtn').addEventListener('click', () => applyTheme(state.theme === 'dark' ? 'light' : 'dark'));
-  $('#langBtn').addEventListener('click', () => setLang(state.lang === 'bn' ? 'en' : 'bn'));
   $('#queueBtn').addEventListener('click', () => openDrawer('queue'));
   $('#drawerClose').addEventListener('click', closeDrawer);
   $('#backdrop').addEventListener('click', closeDrawer);
   $$('.drawer-tab').forEach((b) => b.addEventListener('click', () => switchDrawerTab(b.dataset.dtab)));
   $('#queuePanel').addEventListener('click', onQueueClick);
-  $('#modal').addEventListener('click', (e) => { if (e.target.id === 'modal') closeModal(); });
+  $('#settingsPanel').addEventListener('click', onSettingsClick);
 
   document.addEventListener('click', async (e) => {
     const c = e.target.closest('[data-copy]');
@@ -1217,7 +1361,7 @@ function bindEvents() {
     try { await navigator.clipboard.writeText(c.dataset.copy); toast(t('toast.copied'), 'ok'); } catch { toast(c.dataset.copy, 'info'); }
   });
 
-  // Paste anywhere on the page
+  // paste anywhere on the page
   document.addEventListener('paste', (e) => {
     const tg = e.target;
     if (tg.closest && tg.closest('input, textarea, [contenteditable="true"]')) return;
@@ -1230,15 +1374,12 @@ function bindEvents() {
     updatePlatformBadge();
     if (state.settings.autoFetch) fetchInfo(url);
   });
-
-  // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
-    if (e.key === 'Escape') { closeModal(); closeDrawer(); }
+    if (e.key === 'Escape') closeDrawer();
     if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setMode('single'); input().select(); }
-    if (e.key === '/' && !e.target.closest('input, textarea, select')) { e.preventDefault(); setMode('single'); input().focus(); }
   });
 
-  // Drag & drop links
+  // drag & drop links
   let dragDepth = 0;
   const overlay = $('#dropOverlay');
   window.addEventListener('dragenter', (e) => {
@@ -1257,33 +1398,60 @@ function bindEvents() {
     if (url) fetchInfo(url); else toast(t('err.invalidUrl'), 'err');
   });
 
-  document.addEventListener('visibilitychange', () => { if (!document.hidden && state.pollTimer) { clearTimeout(state.pollTimer); state.pollTimer = null; poll(); } });
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) {
+      if (state.pollTimer) { clearTimeout(state.pollTimer); state.pollTimer = null; poll(); }
+      checkClipboard();
+    }
+  });
+  window.addEventListener('focus', checkClipboard);
 }
 
 /* ------------------------------------------------------------------ init */
+function rerenderForLang() {
+  renderHeroTitle();
+  renderStatic();
+  renderBatchCount();
+  if (state.info) renderInfo(state.info, true);
+  renderQueue();
+  if (!$('#historyPanel').classList.contains('hidden')) renderHistory();
+  if (!$('#settingsPanel').classList.contains('hidden')) renderSettings();
+}
+
 async function init() {
-  hydrateIcons();
-  applyTheme(state.theme);
-  setLang(state.lang);
+  initChrome({ spa: true, onKey });
+  // honour the language stored on this device (the server may have rendered another one)
+  const stored = store.raw('lang');
+  if (stored && stored !== ui.lang && STRINGS[stored]) { ui.lang = stored; document.documentElement.lang = stored; }
+  $('#langLabel').textContent = ui.lang === 'bn' ? 'English' : 'বাংলা';
+  applyI18n();
+  onLang(rerenderForLang);
+  renderHeroTitle();
+  renderStatic();
+  renderBatchCount();
   bindEvents();
-  setupPWA();
   startRotator();
   updatePlatformBadge();
   updateBadge();
+  renderQueue();
 
   const bm = `javascript:(function(){window.open('${location.origin}/?url='+encodeURIComponent(location.href),'_blank');})();`;
   $('#bookmarklet').setAttribute('href', bm);
+  $('#bookmarklet').addEventListener('click', (e) => e.preventDefault());
 
   api('/api/config').then((c) => { state.config = c; }).catch(() => {});
   refreshHealth();
   restoreJobs();
+  checkClipboard();
 
-  // Share target / deep link: /?url=...  or  ?text=... (Android share sheet)
+  // share target / deep link: /?url=...  or  ?text=... (Android share sheet)
   const params = new URLSearchParams(location.search);
+  if (params.get('open') === 'downloads') { params.delete('open'); history.replaceState({}, '', location.pathname); openDrawer('queue'); }
   const shared = params.get('url') || params.get('text') || params.get('title');
   if (shared) {
     const url = extractUrl(shared);
-    history.replaceState({}, '', location.pathname);
+    params.delete('url'); params.delete('text'); params.delete('title');
+    history.replaceState({}, '', location.pathname + (params.toString() ? '?' + params : ''));
     if (url) fetchInfo(url);
   }
 }
