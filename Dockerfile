@@ -21,6 +21,9 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
+# Repo was uploaded flat (no folders)? Rebuild the folders first.
+RUN python organize.py
+
 # Uploading through GitHub's website can silently drop folders (always, from a phone).
 # Stop here with a clear message instead of a cryptic error later on.
 RUN missing=""; \
