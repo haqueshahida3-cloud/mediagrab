@@ -6,6 +6,8 @@ cd "$(dirname "$0")"
 # Use locally installed ffmpeg / deno if present
 export PATH="$HOME/.local/bin:$HOME/.deno/bin:$PATH"
 [ -f .env ] && set -a && . ./.env && set +a
+# Local development: allow the app to be shown inside preview iframes (production keeps frame protection)
+export ALLOW_FRAMING="${ALLOW_FRAMING:-true}"
 
 HOST="${HOST:-0.0.0.0}"
 PORT="${PORT:-8000}"

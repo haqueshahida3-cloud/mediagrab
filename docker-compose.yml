@@ -7,10 +7,14 @@ services:
       - "8000:8000"
     environment:
       # SECRET_KEY: "change-me-to-a-long-random-string"
+      # ADMIN_TOKEN: "a-long-random-admin-token"      # enables /admin
+      # PUBLIC_BASE_URL: "https://media.example.com"
+      # CONTACT_EMAIL: "support@example.com"
       FILE_TTL_MINUTES: "30"
       MAX_CONCURRENT_DOWNLOADS: "3"
       MAX_FILESIZE_MB: "2048"
       MAX_DURATION_MINUTES: "240"
+      MAX_UPLOAD_MB: "200"
       YTDLP_AUTO_UPDATE: "true"
       # PROXY: "http://user:pass@host:port"
     volumes:

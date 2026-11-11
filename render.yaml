@@ -9,11 +9,23 @@ services:
     envVars:
       - key: SECRET_KEY
         generateValue: true
+      - key: ADMIN_TOKEN       # enables /admin — Render asks you for a value on first deploy
+        sync: false
+      - key: PUBLIC_BASE_URL   # e.g. https://mediagrab-xxxx.onrender.com or your own domain
+        sync: false
+      - key: CONTACT_EMAIL
+        sync: false
+      - key: FORCE_HTTPS
+        value: "true"
       - key: MAX_CONCURRENT_DOWNLOADS
         value: "2"
       - key: FILE_TTL_MINUTES
         value: "30"
       - key: MAX_FILESIZE_MB
         value: "1024"
+      - key: MAX_UPLOAD_MB
+        value: "200"
       - key: YTDLP_AUTO_UPDATE
         value: "true"
+# Cookies (optional, e.g. YouTube / Facebook): Dashboard → your service → Environment → Secret Files →
+# add youtube.txt / facebook.txt … They are mounted at /etc/secrets and picked up automatically.
