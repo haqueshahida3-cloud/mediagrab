@@ -132,6 +132,9 @@ def video_options(info: dict) -> list[dict]:
             "hdr": hdr,
             "width": rep.get("width"),
             "height": rep.get("height"),
+            "original": f"{rep.get('width')}×{rep.get('height')}" if rep.get("width") and rep.get("height") else None,
+            "vcodec": rep.get("vcodec"),
+            "has_audio": rep.get("acodec") not in (None, "none"),
         }
         # Two groups can map to the same label (e.g. 1920x800 & 1920x804) – keep the bigger one
         prev = options.get(res)
@@ -266,8 +269,15 @@ def build_single(info: dict, source_url: str) -> dict:
     duration = info.get("duration")
     d = info.get("upload_date")
     live_status = info.get("live_status")
+    vopts = video_options(info)
+    aopts = audio_options(info)
+    max_res = max((o["res"] for o in vopts), default=0)
     return {
         "type": "video",
+        "media_type": "video" if vopts else ("audio" if aopts else "video"),
+        "max_res": max_res or None,
+        "max_badge": quality_badge(max_res) if max_res else None,
+        "formats_hidden": bool(info.get("_mg_hidden")),
         "id": info.get("id"),
         "platform": platform,
         "extractor": info.get("extractor_key") or info.get("extractor"),
@@ -286,8 +296,8 @@ def build_single(info: dict, source_url: str) -> dict:
         "upload_date": f"{d[:4]}-{d[4:6]}-{d[6:8]}" if d and len(d) == 8 else None,
         "is_live": bool(info.get("is_live")) or live_status in ("is_live", "is_upcoming"),
         "age_limit": info.get("age_limit") or 0,
-        "video": video_options(info),
-        "audio": audio_options(info),
+        "video": vopts,
+        "audio": aopts,
         "thumbnails": thumbnail_options(info, title),
         "subtitles": subtitle_options(info),
         "chapters": [
@@ -323,6 +333,7 @@ def build_playlist(info: dict, source_url: str) -> dict:
     first_thumb = next((it["thumbnail"] for it in items if it["thumbnail"]), None)
     return {
         "type": "playlist",
+        "media_type": "playlist",
         "id": info.get("id"),
         "platform": platform,
         "url": source_url,
@@ -344,3 +355,49 @@ def build_response(info: dict, source_url: str) -> dict:
             return build_single(single, source_url)
         return build_playlist(info, source_url)
     return build_single(info, source_url)
+
+
+def build_gallery(g: dict, source_url: str) -> dict:
+    """Photo / carousel / album / mixed post → UI structure (media URLs only as signed previews)."""
+    items = []
+    for it in g["items"]:
+        w, h = it.get("width"), it.get("height")
+        items.append({
+            "index": it["index"],
+            "type": it["type"],
+            "width": w,
+            "height": h,
+            "label": f"{w}×{h}" if (w and h) else None,
+            "ext": it.get("ext"),
+            "duration": it.get("duration"),
+            "title": it.get("title"),
+            "alt": it.get("alt"),
+            "preview": proxied_image(it.get("preview"), width=480),
+            "full": proxied_image(it.get("preview"), width=1080) if it["type"] == "image" else None,
+        })
+    counts = {k: sum(1 for i in items if i["type"] == k) for k in ("image", "video", "audio")}
+    cover = next((i["preview"] for i in items if i["preview"]), None)
+    return {
+        "type": "gallery",
+        "media_type": g["media_type"],
+        "platform": g["platform"],
+        "id": g.get("id"),
+        "url": source_url,
+        "title": g.get("title") or "Untitled",
+        "description": g.get("description") or "",
+        "uploader": g.get("uploader"),
+        "uploader_url": g.get("uploader_url"),
+        "upload_date": g.get("upload_date"),
+        "thumbnail": cover,
+        "count": len(items),
+        "counts": counts,
+        "items": items,
+        "note": g.get("note"),
+        "total": g.get("total"),
+    }
+
+
+def build_any(result: dict, source_url: str) -> dict:
+    if result.get("gallery"):
+        return build_gallery(result["gallery"], source_url)
+    return build_response(result["raw"], source_url)

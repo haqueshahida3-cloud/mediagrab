@@ -94,6 +94,21 @@ def validate_public_url(raw: str) -> str:
     return url
 
 
+def is_public_http_url(url: str) -> bool:
+    """True when `url` is http(s) and its host resolves only to public addresses (SSRF guard for media CDNs)."""
+    try:
+        parsed = urlparse(url)
+        if parsed.scheme not in ("http", "https") or not parsed.hostname:
+            return False
+        host = parsed.hostname.lower()
+        if host == "localhost" or host.endswith((".local", ".internal", ".localhost")):
+            return False
+        infos = socket.getaddrinfo(host, parsed.port or (443 if parsed.scheme == "https" else 80))
+    except (OSError, UnicodeError, ValueError):
+        return False
+    return bool(infos) and all(_is_public_ip(info[4][0]) for info in infos)
+
+
 _ILLEGAL = re.compile(r'[\\/:*?"<>|\x00-\x1f\x7f]+')
 
 
@@ -123,11 +138,15 @@ def verify(value: str, signature: str) -> bool:
     return hmac.compare_digest(sign(value), signature or "")
 
 
-def proxied_image(url: str | None, name: str | None = None, download: bool = False) -> str | None:
-    """Return a signed same-origin URL that proxies a remote thumbnail (avoids CORP/hotlink blocks)."""
+def proxied_image(url: str | None, name: str | None = None, download: bool = False,
+                  width: int | None = None) -> str | None:
+    """Return a signed same-origin URL that proxies a remote image (avoids CORP/hotlink blocks).
+    `width` asks the proxy for a resized preview (240/360/480/720/1080)."""
     if not url or not url.startswith(("http://", "https://")):
         return None
     params = {"u": url, "s": sign(url)}
+    if width and not download:
+        params["w"] = str(width)
     if download:
         params["dl"] = "1"
         if name:
@@ -156,3 +175,95 @@ def fmt_ts(seconds: float) -> str:
     h, rem = divmod(seconds, 3600)
     m, s = divmod(rem, 60)
     return f"{h}h{m:02d}m{s:02d}s" if h else f"{m}m{s:02d}s"
+
+
+# ---------------------------------------------------------------------------- file types
+_CTYPE_EXT = {
+    "image/jpeg": "jpg", "image/jpg": "jpg", "image/pjpeg": "jpg", "image/png": "png", "image/webp": "webp",
+    "image/gif": "gif", "image/avif": "avif", "image/heic": "heic", "image/heif": "heic", "image/bmp": "bmp",
+    "video/mp4": "mp4", "video/webm": "webm", "video/quicktime": "mov", "audio/mpeg": "mp3", "audio/mp4": "m4a",
+    "audio/x-m4a": "m4a", "audio/aac": "aac", "audio/ogg": "ogg", "audio/webm": "weba", "audio/wav": "wav",
+}
+
+
+def ext_from_content_type(ctype: str | None) -> str | None:
+    return _CTYPE_EXT.get((ctype or "").split(";")[0].strip().lower())
+
+
+def sniff_media(head: bytes) -> tuple[str, str] | None:
+    """Identify a file from its first bytes → (kind, ext). None = not a media file (e.g. an HTML error page)."""
+    if head.startswith(b"\xff\xd8\xff"):
+        return "image", "jpg"
+    if head.startswith(b"\x89PNG\r\n\x1a\n"):
+        return "image", "png"
+    if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+        return "image", "webp"
+    if head[:4] == b"RIFF" and head[8:12] == b"WAVE":
+        return "audio", "wav"
+    if head.startswith((b"GIF87a", b"GIF89a")):
+        return "image", "gif"
+    if head.startswith(b"BM"):
+        return "image", "bmp"
+    if head[4:8] == b"ftyp":
+        brand = head[8:12]
+        if brand in (b"avif", b"avis"):
+            return "image", "avif"
+        if brand in (b"heic", b"heix", b"mif1", b"msf1", b"hevc", b"heim", b"heis"):
+            return "image", "heic"
+        if brand in (b"M4A ", b"M4B "):
+            return "audio", "m4a"
+        if brand == b"qt  ":
+            return "video", "mov"
+        return "video", "mp4"
+    if head.startswith(b"\x1a\x45\xdf\xa3"):
+        return "video", "webm"
+    if head.startswith(b"ID3") or (len(head) > 1 and head[0] == 0xFF and (head[1] & 0xE0) == 0xE0):
+        return "audio", "mp3"
+    if head.startswith(b"OggS"):
+        return "audio", "ogg"
+    if head.startswith(b"fLaC"):
+        return "audio", "flac"
+    return None
+
+
+def image_dimensions(path) -> tuple[int, int] | None:
+    """Read width/height from a JPEG, PNG, GIF or WebP header (no image library needed)."""
+    import struct
+    try:
+        with open(path, "rb") as fh:
+            head = fh.read(32)
+            if head.startswith(b"\x89PNG") and head[12:16] == b"IHDR":
+                return struct.unpack(">II", head[16:24])
+            if head[:6] in (b"GIF87a", b"GIF89a"):
+                return struct.unpack("<HH", head[6:10])
+            if head[:4] == b"RIFF" and head[8:12] == b"WEBP":
+                chunk = head[12:16]
+                if chunk == b"VP8X":
+                    w = int.from_bytes(head[24:27], "little") + 1
+                    h = int.from_bytes(fh.read(3), "little") + 1
+                    return w, h
+                if chunk == b"VP8 ":
+                    fh.seek(26)
+                    w, h = struct.unpack("<HH", fh.read(4))
+                    return w & 0x3FFF, h & 0x3FFF
+                if chunk == b"VP8L":
+                    fh.seek(21)
+                    b = fh.read(4)
+                    w = 1 + (((b[1] & 0x3F) << 8) | b[0])
+                    h = 1 + (((b[3] & 0xF) << 10) | (b[2] << 2) | ((b[1] & 0xC0) >> 6))
+                    return w, h
+            if head[:2] == b"\xff\xd8":
+                fh.seek(2)
+                while True:
+                    marker = fh.read(2)
+                    if len(marker) < 2 or marker[0] != 0xFF:
+                        return None
+                    if marker[1] in (0xC0, 0xC1, 0xC2, 0xC3, 0xC5, 0xC6, 0xC7, 0xC9, 0xCA, 0xCB, 0xCD, 0xCE, 0xCF):
+                        fh.read(3)
+                        h, w = struct.unpack(">HH", fh.read(4))
+                        return w, h
+                    seg_len = struct.unpack(">H", fh.read(2))[0]
+                    fh.seek(seg_len - 2, 1)
+    except (OSError, struct.error, IndexError):
+        return None
+    return None

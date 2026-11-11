@@ -1,4 +1,7 @@
-"""Background download jobs: queue, progress tracking, cancellation and cleanup."""
+"""Background jobs: queue, progress, pause/resume, retry, cancellation, verification and cleanup.
+
+Job kinds:  video | audio  (yt-dlp + FFmpeg)   gallery (photos / carousel items, ZIP)   convert (Media Tools)
+"""
 from __future__ import annotations
 
 import json
@@ -16,21 +19,27 @@ from yt_dlp.postprocessor.common import PostProcessor
 from yt_dlp.utils import DownloadCancelled, DownloadError
 
 from .config import settings
-from .media import AUDIO_PRESETS, nice_title
-from .utils import clean_title, proxied_image
+from .media import AUDIO_PRESETS, codec_name, display_res, nice_title
+from .monitor import monitor
+from .utils import clean_title, image_dimensions, proxied_image
 from .ytdl import (
+    TRANSIENT_CODES,
+    Attempt,
     CollectLogger,
     MediaError,
     base_opts,
+    has_cookies,
     humanize_error,
     info_cache,
-    is_bot_check,
+    is_youtube_retryable,
     private_cookies,
     youtube_attempts,
 )
 
+MB = 1024 * 1024
 ACTIVE = {"queued", "preparing", "downloading", "processing"}
 DONE = {"finished", "error", "cancelled"}
+PAUSABLE_KINDS = {"video", "audio", "gallery"}
 
 PP_STAGES = [
     ("Merger", "merging"),
@@ -51,7 +60,7 @@ PP_STAGES = [
 _SKIP_SUFFIXES = {".part", ".ytdl", ".jpg", ".jpeg", ".webp", ".png", ".vtt", ".srt", ".json", ".temp", ".txt"}
 
 
-def _tool(name: str) -> str:
+def tool(name: str) -> str:
     """Path of ffmpeg/ffprobe honouring FFMPEG_LOCATION (dir or binary path)."""
     loc = settings.ffmpeg_location
     if loc:
@@ -62,6 +71,56 @@ def _tool(name: str) -> str:
     return shutil.which(name) or name
 
 
+def ffprobe(path: Path) -> dict:
+    try:
+        r = subprocess.run(
+            [tool("ffprobe"), "-v", "error", "-show_format", "-show_streams", "-of", "json", str(path)],
+            capture_output=True, text=True, timeout=90,
+        )
+        return json.loads(r.stdout or "{}")
+    except (OSError, ValueError, subprocess.SubprocessError):
+        return {}
+
+
+def _fps(rate: str | None) -> float | None:
+    try:
+        num, den = (rate or "0/1").split("/")
+        val = float(num) / float(den or 1)
+        return round(val, 2) if val > 0 else None
+    except (ValueError, ZeroDivisionError):
+        return None
+
+
+def media_summary(probe: dict) -> dict:
+    """Compact description of an output file (shown in the download manager)."""
+    streams = probe.get("streams") or []
+    fmt = probe.get("format") or {}
+    v = next((s for s in streams if s.get("codec_type") == "video"
+              and not (s.get("disposition") or {}).get("attached_pic")), None)
+    a = next((s for s in streams if s.get("codec_type") == "audio"), None)
+    out: dict = {
+        "container": (fmt.get("format_name") or "").split(",")[0] or None,
+        "duration": round(float(fmt.get("duration") or 0), 2) or None,
+        "bitrate": int(fmt.get("bit_rate") or 0) or None,
+    }
+    if v:
+        w, h = v.get("width"), v.get("height")
+        out.update({
+            "width": w, "height": h, "res": display_res(w, h) or None,
+            "vcodec": codec_name(v.get("codec_name")) or (v.get("codec_name") or "").upper() or None,
+            "fps": _fps(v.get("avg_frame_rate")) or _fps(v.get("r_frame_rate")),
+            "hdr": v.get("color_transfer") in ("smpte2084", "arib-std-b67"),
+        })
+    if a:
+        out.update({
+            "acodec": (a.get("codec_name") or "").upper() or None,
+            "audio_bitrate": int(a.get("bit_rate") or 0) or None,
+            "sample_rate": int(a.get("sample_rate") or 0) or None,
+            "channels": a.get("channels"),
+        })
+    return out
+
+
 class _Skipped(Exception):
     def __init__(self, code: str, message: str):
         super().__init__(message)
@@ -70,7 +129,8 @@ class _Skipped(Exception):
 
 
 class _PlanPP(PostProcessor):
-    """Runs right before the download starts: records which formats (parts) will be fetched."""
+    """Runs right before the download starts: records which formats (parts) will be fetched, refuses silent
+    quality downgrades and checks free disk space."""
 
     def __init__(self, job: "Job", plan: dict):
         super().__init__(None)
@@ -80,9 +140,39 @@ class _PlanPP(PostProcessor):
     def run(self, info):
         req = info.get("requested_formats") or [info]
         self.plan["parts"] = [
-            {"size": int(f.get("filesize") or f.get("filesize_approx") or 0), "video": f.get("vcodec") != "none"}
+            {"size": int(f.get("filesize") or f.get("filesize_approx") or 0),
+             "video": f.get("vcodec") not in (None, "none"), "audio": f.get("acodec") not in (None, "none")}
             for f in req
         ]
+        self.plan["duration"] = info.get("duration")
+        vf = next((f for f in req if f.get("vcodec") not in (None, "none")), None)
+        af = next((f for f in req if f.get("acodec") not in (None, "none")), None)
+        if vf:
+            self.plan["source"] = {
+                "width": vf.get("width"), "height": vf.get("height"), "fps": vf.get("fps"),
+                "vcodec": codec_name(vf.get("vcodec")) or vf.get("vcodec"), "format_id": vf.get("format_id"),
+                "dynamic_range": vf.get("dynamic_range"),
+                "abr": (af or {}).get("abr"), "acodec": (af or {}).get("acodec"),
+            }
+        if self.job.kind == "video" and self.job.quality.isdigit() and vf:
+            want = int(self.job.quality)
+            w, h = vf.get("width"), vf.get("height")
+            got = min(w, h) if (w and h) else (h or w or 0)
+            if got and got < want * 0.85:
+                self.plan["quality_error"] = (want, got, display_res(w, h))
+                raise DownloadError(f"quality_unavailable: requested {want}, best available {got}")
+        est = sum(p["size"] for p in self.plan["parts"])
+        o = self.job.options or {}
+        start, end, dur = o.get("trim_start_s"), o.get("trim_end_s"), info.get("duration")
+        if (start is not None or end is not None) and dur:
+            clip = min(end if end is not None else dur, dur) - (start or 0)
+            est = int(est * max(0.02, clip / dur))  # only the selected section is downloaded
+        try:
+            free = shutil.disk_usage(settings.data_dir).free
+        except OSError:
+            free = 0
+        if free and est and free - est * 1.15 < settings.min_free_disk_mb * MB:
+            raise DownloadError("disk_full: not enough free space for this file")
         if (info.get("title") or info.get("description")) and (not self.job.title or self.job.title.startswith("http")):
             self.job.title = nice_title(info)[:200]
         if not self.job.thumbnail and info.get("thumbnail"):
@@ -95,7 +185,7 @@ class Job:
     id: str
     url: str
     platform: str
-    kind: str  # video | audio
+    kind: str  # video | audio | gallery | convert
     quality: str
     options: dict
     client_ip: str
@@ -115,11 +205,22 @@ class Job:
     filepath: str = ""
     error: str = ""
     error_code: str = ""
+    warning: str = ""
+    media: dict = field(default_factory=dict)
+    source: dict = field(default_factory=dict)
     created: float = field(default_factory=time.time)
     started: float = 0.0
     finished: float = 0.0
     cancel_requested: bool = False
+    pause_requested: bool = False
+    attempts: int = 0
+    run_token: int = 0
     served: int = 0
+    details: list = field(default_factory=list)
+
+    @property
+    def pausable(self) -> bool:
+        return self.kind in PAUSABLE_KINDS and self.status in {"queued", "preparing", "downloading"}
 
     def public(self, queue_position: int | None = None) -> dict:
         ttl = settings.file_ttl_minutes * 60
@@ -143,6 +244,11 @@ class Job:
             "filename": self.filename,
             "error": self.error,
             "error_code": self.error_code,
+            "warning": self.warning,
+            "media": self.media or None,
+            "source": self.source or None,
+            "pausable": self.pausable,
+            "retryable": self.status in ("error", "cancelled") and self.kind != "convert",
             "created": self.created,
             "finished": self.finished or None,
             "queue_position": queue_position,
@@ -163,8 +269,12 @@ class JobManager:
         job = Job(id=uuid.uuid4().hex[:16], **kwargs)
         with self.lock:
             self.jobs[job.id] = job
-        self.executor.submit(self._run, job)
+        self._submit(job)
         return job
+
+    def _submit(self, job: Job) -> None:
+        job.run_token += 1
+        self.executor.submit(self._run, job, job.run_token)
 
     def get(self, job_id: str) -> Job | None:
         return self.jobs.get(job_id)
@@ -193,10 +303,52 @@ class JobManager:
         job = self.jobs.get(job_id)
         if not job:
             return None
-        if job.status in ACTIVE:
+        if job.status in ACTIVE or job.status == "paused":
             job.cancel_requested = True
-            if job.status == "queued":
+            if job.status in ("queued", "paused"):
                 self._mark_cancelled(job)
+                shutil.rmtree(settings.download_dir / job.id, ignore_errors=True)
+        return job
+
+    def pause(self, job_id: str) -> Job:
+        job = self.jobs.get(job_id)
+        if not job:
+            raise MediaError("Job not found or expired", "not_found", 404)
+        if not job.pausable:
+            raise MediaError("This download can't be paused right now.", "not_pausable", 409)
+        if job.status == "queued":
+            job.status = job.stage = "paused"
+            job.run_token += 1  # the queued run will exit immediately
+        else:
+            job.pause_requested = True
+        return job
+
+    def resume(self, job_id: str) -> Job:
+        job = self.jobs.get(job_id)
+        if not job:
+            raise MediaError("Job not found or expired", "not_found", 404)
+        if job.status != "paused":
+            raise MediaError("This download isn't paused.", "not_paused", 409)
+        job.pause_requested = job.cancel_requested = False
+        job.status = job.stage = "queued"
+        job.speed = job.eta = None
+        self._submit(job)
+        return job
+
+    def retry(self, job_id: str) -> Job:
+        job = self.jobs.get(job_id)
+        if not job:
+            raise MediaError("Job not found or expired", "not_found", 404)
+        if job.status not in ("error", "cancelled") or job.kind == "convert":
+            raise MediaError("Only failed or cancelled downloads can be retried.", "not_retryable", 409)
+        job.status = job.stage = "queued"
+        job.error = job.error_code = job.warning = ""
+        job.progress, job.downloaded, job.total = 0.0, 0, 0
+        job.speed = job.eta = None
+        job.finished = 0.0
+        job.cancel_requested = job.pause_requested = False
+        job.attempts = 0
+        self._submit(job)
         return job
 
     def remove(self, job_id: str) -> bool:
@@ -215,7 +367,9 @@ class JobManager:
         with self.lock:
             stale = [
                 j for j in self.jobs.values()
-                if (j.status in DONE and j.finished and now - j.finished > ttl) or (now - j.created > max(ttl * 6, 7200))
+                if (j.status in DONE and j.finished and now - j.finished > ttl)
+                or (j.status == "paused" and now - j.created > max(ttl * 2, 3600))
+                or (now - j.created > max(ttl * 6, 7200))
             ]
             for j in stale:
                 self.jobs.pop(j.id, None)
@@ -229,17 +383,28 @@ class JobManager:
                     shutil.rmtree(d, ignore_errors=True)
             except OSError:
                 pass
-        for d in settings.tmp_dir.iterdir():
-            try:
-                if now - d.stat().st_mtime > 3600:
-                    shutil.rmtree(d, ignore_errors=True) if d.is_dir() else d.unlink(missing_ok=True)
-            except OSError:
-                pass
+        for base, max_age in ((settings.tmp_dir, 3600), (settings.upload_dir, ttl)):
+            for d in base.iterdir():
+                try:
+                    if now - d.stat().st_mtime > max_age:
+                        shutil.rmtree(d, ignore_errors=True) if d.is_dir() else d.unlink(missing_ok=True)
+                except OSError:
+                    pass
 
     def shutdown(self) -> None:
         for j in list(self.jobs.values()):
             j.cancel_requested = True
         self.executor.shutdown(wait=False, cancel_futures=True)
+
+    def admin_list(self) -> list[dict]:
+        with self.lock:
+            jobs = sorted(self.jobs.values(), key=lambda j: j.created, reverse=True)[:100]
+        return [{
+            "id": j.id, "platform": j.platform, "kind": j.kind, "label": j.label, "title": (j.title or "")[:90],
+            "status": j.status, "stage": j.stage, "progress": round(j.progress, 1), "speed": j.speed,
+            "filesize": j.filesize or j.total, "created": j.created, "finished": j.finished or None,
+            "error_code": j.error_code or None,
+        } for j in jobs]
 
     # ------------------------------------------------------------------ worker
     def _mark_cancelled(self, job: Job) -> None:
@@ -248,59 +413,149 @@ class JobManager:
         job.speed = job.eta = None
         job.finished = time.time()
 
-    def _run(self, job: Job) -> None:
-        if job.cancel_requested or job.status == "cancelled":
+    def _stop_requested(self, job: Job) -> bool:
+        return job.cancel_requested or job.pause_requested
+
+    def _run(self, job: Job, token: int) -> None:
+        if token != job.run_token or job.cancel_requested or job.status in ("cancelled", "paused"):
             return
-        job.status, job.stage, job.started = "preparing", "preparing", time.time()
+        job.status, job.stage = "preparing", "preparing"
+        job.started = job.started or time.time()
         job_dir = settings.download_dir / job.id
         job_dir.mkdir(parents=True, exist_ok=True)
-        try:
-            path = self._download(job, job_dir)
-            if job.cancel_requested:
-                raise DownloadCancelled("Cancelled by user")
-            path = self._ensure_mp3_bitrate(job, path)
-            job.filepath = str(path)
-            job.filesize = path.stat().st_size
-            job.filename = self._display_name(job, path)
-            job.progress = 100.0
+        area = {"gallery": "gallery", "convert": "convert"}.get(job.kind, "download")
+        while True:
+            try:
+                self._check_disk()
+                if job.kind == "gallery":
+                    path = self._run_gallery(job, job_dir)
+                elif job.kind == "convert":
+                    from .tools import run_convert
+                    path = run_convert(job, job_dir, lambda: job.cancel_requested)
+                else:
+                    path = self._download(job, job_dir)
+                    if self._stop_requested(job):
+                        raise DownloadCancelled("stopped")
+                    path = self._ensure_mp3_bitrate(job, path)
+                    self._verify_output(job, path)
+                job.filepath = str(path)
+                job.filesize = path.stat().st_size
+                if not job.filename:
+                    job.filename = self._display_name(job, path)
+                job.progress = 100.0
+                job.speed = job.eta = None
+                job.status = job.stage = "finished"
+                job.finished = time.time()
+                self.stats["completed"] += 1
+                self.stats["bytes"] += job.filesize
+                monitor.result(area, job.platform, True)
+                return
+            except DownloadCancelled:
+                break
+            except Exception as e:  # noqa: BLE001
+                if job.pause_requested and not job.cancel_requested:
+                    break
+                if job.cancel_requested:
+                    break
+                if isinstance(e, (MediaError, _Skipped)):
+                    code, msg = getattr(e, "code", "failed"), e.message
+                else:
+                    code, msg = humanize_error(str(e))
+                if code in TRANSIENT_CODES and job.attempts < settings.auto_retries:
+                    job.attempts += 1
+                    job.status, job.stage = "preparing", "retrying"
+                    job.speed = job.eta = None
+                    time.sleep(3)
+                    continue  # partial files are kept → resume
+                self._fail(job, code, msg)
+                monitor.result(area, job.platform, False)
+                monitor.error(area, job.platform, code, msg, job.url, job.details)
+                shutil.rmtree(job_dir, ignore_errors=True)
+                return
+        # stopped by the user
+        if job.pause_requested and not job.cancel_requested:
+            job.pause_requested = False
+            job.status = job.stage = "paused"
             job.speed = job.eta = None
-            job.status = job.stage = "finished"
-            job.finished = time.time()
-            self.stats["completed"] += 1
-            self.stats["bytes"] += job.filesize
-        except DownloadCancelled:
+        else:
             self._mark_cancelled(job)
             shutil.rmtree(job_dir, ignore_errors=True)
-        except (MediaError, _Skipped) as e:
-            self._fail(job, getattr(e, "code", "failed"), e.message)
-            shutil.rmtree(job_dir, ignore_errors=True)
-        except Exception as e:  # noqa: BLE001
-            code, msg = humanize_error(str(e))
-            self._fail(job, code, msg)
-            shutil.rmtree(job_dir, ignore_errors=True)
 
+    @staticmethod
+    def _check_disk() -> None:
+        try:
+            free = shutil.disk_usage(settings.data_dir).free
+        except OSError:
+            return
+        if free < settings.min_free_disk_mb * MB:
+            raise MediaError("The server is low on disk space right now. Please try again in a few minutes.",
+                             "disk_full")
+
+    def _fail(self, job: Job, code: str, message: str) -> None:
+        job.status = job.stage = "error"
+        job.error_code = code
+        job.error = message
+        job.speed = job.eta = None
+        job.finished = time.time()
+        self.stats["failed"] += 1
+
+    # ------------------------------------------------------------------ verification
+    def _verify_output(self, job: Job, path: Path) -> None:
+        """Never present a broken/incomplete file as a success."""
+        if not path.exists() or path.stat().st_size == 0:
+            raise MediaError("The download produced an empty file. Please try again.", "incomplete")
+        probe = ffprobe(path)
+        if not probe:
+            raise MediaError("The downloaded file could not be read (FFmpeg verification failed). Please try again.",
+                             "ffmpeg_failed")
+        summary = media_summary(probe)
+        plan = getattr(job, "_plan", {}) or {}
+        parts = plan.get("parts") or []
+        o = job.options or {}
+        if job.kind == "video":
+            if not summary.get("width"):
+                raise MediaError("The file has no video track — processing failed. Please try again.", "ffmpeg_failed")
+            if any(p.get("audio") for p in parts) and not summary.get("acodec"):
+                raise MediaError("Merging the audio track failed (the file has no sound). Please try again.",
+                                 "ffmpeg_failed")
+        elif job.kind == "audio" and not summary.get("acodec"):
+            raise MediaError("The file has no audio track — conversion failed. Please try again.", "ffmpeg_failed")
+        dur = plan.get("duration")
+        start, end = o.get("trim_start_s"), o.get("trim_end_s")
+        if start is not None or end is not None:
+            limits = [x for x in (end, dur) if x is not None]
+            expected = (min(limits) - (start or 0)) if limits else None
+        else:
+            expected = dur
+        got = summary.get("duration")
+        if expected and got and not o.get("sponsorblock") and got < expected * 0.9 - 2:
+            raise MediaError(f"The download was incomplete ({int(got)}s of {int(expected)}s). Please try again.",
+                             "incomplete")
+        job.media = summary
+        src = plan.get("source") or {}
+        if src:
+            job.source = {k: v for k, v in src.items() if v not in (None, "")}
+
+    # ------------------------------------------------------------------ yt-dlp downloads
     def _ensure_mp3_bitrate(self, job: Job, path: Path) -> Path:
         """yt-dlp stream-copies when the source is already MP3 (e.g. TikTok sounds), ignoring the requested
         bitrate. Re-encode so the file matches what the user picked (cover art + tags are preserved)."""
         preset = AUDIO_PRESETS.get(job.quality) or {}
         if job.kind != "audio" or preset.get("codec") != "mp3" or not preset.get("kbps") or path.suffix.lower() != ".mp3":
             return path
+        probe = ffprobe(path)
+        streams = probe.get("streams", [])
+        audio = next((st for st in streams if st.get("codec_type") == "audio"), {})
         try:
-            probe = subprocess.run(
-                [_tool("ffprobe"), "-v", "error", "-show_entries", "stream=codec_type,bit_rate", "-of", "json", str(path)],
-                capture_output=True, text=True, timeout=60,
-            )
-            streams = json.loads(probe.stdout or "{}").get("streams", [])
-            audio = next((st for st in streams if st.get("codec_type") == "audio"), {})
             current = int(float(audio.get("bit_rate") or 0)) // 1000
-            has_cover = any(st.get("codec_type") == "video" for st in streams)
-        except (OSError, ValueError, subprocess.SubprocessError):
-            return path
+        except ValueError:
+            current = 0
+        has_cover = any(st.get("codec_type") == "video" for st in streams)
         if not current or abs(current - preset["kbps"]) <= 16:
             return path
         job.status, job.stage = "processing", "converting"
         tmp = path.with_name("media.reencode.mp3")
-        cmd = [_tool("ffmpeg"), "-y", "-v", "error", "-i", str(path), "-map", "0:a:0"]
+        cmd = [tool("ffmpeg"), "-y", "-v", "error", "-i", str(path), "-map", "0:a:0"]
         if has_cover:
             cmd += ["-map", "0:v:0", "-c:v", "copy", "-disposition:v:0", "attached_pic"]
         cmd += ["-c:a", "libmp3lame", "-b:a", f"{preset['kbps']}k", "-map_metadata", "0", "-id3v2_version", "3", str(tmp)]
@@ -314,72 +569,79 @@ class JobManager:
             tmp.unlink(missing_ok=True)
         return path
 
-    def _fail(self, job: Job, code: str, message: str) -> None:
-        job.status = job.stage = "error"
-        job.error_code = code
-        job.error = message
-        job.speed = job.eta = None
-        job.finished = time.time()
-        self.stats["failed"] += 1
-
     def _download(self, job: Job, job_dir: Path) -> Path:
         cached = None if job.playlist_index else info_cache.get(job.url)
         first_clients = (cached or {}).get("_mg_clients")
-        plan: list[tuple[str, list[str] | None]] = []
+        first_cookies = (cached or {}).get("_mg_cookies")
+        plan: list[tuple[str, Attempt]] = []
         if cached:
-            plan.append(("cache", first_clients))
-        plan += [("fresh", c) for c in youtube_attempts(job.platform, first_clients)]
+            plan.append(("cache", Attempt(first_clients, bool(first_cookies) if first_cookies is not None
+                                          else has_cookies(job.platform))))
+        plan += [("fresh", a) for a in youtube_attempts(job.platform, first_clients, first_cookies)]
 
-        last_error = ""
-        for mode, clients in plan:
+        last_error, quality = "", None
+        for mode, att in plan:
             try:
-                return self._attempt(job, job_dir, mode, clients, cached)
-            except DownloadCancelled:
-                raise
-            except _Skipped:
+                return self._attempt(job, job_dir, mode, att, cached)
+            except (DownloadCancelled, _Skipped):
                 raise
             except DownloadError as e:
                 last_error = str(e)
-                if job.cancel_requested:
-                    raise DownloadCancelled("Cancelled by user") from None
+                quality = (getattr(job, "_plan", {}) or {}).get("quality_error") or quality
+                if self._stop_requested(job):
+                    raise DownloadCancelled("stopped") from None
                 self._reset(job, job_dir)
                 code, _ = humanize_error(last_error)
-                if code in ("too_large", "cancelled", "private", "unavailable", "unsupported"):
+                if code in ("too_large", "cancelled", "private", "unavailable", "unsupported", "disk_full", "live",
+                            "age_restricted", "geo_blocked"):
                     break
                 if mode == "cache":
                     continue  # cached stream URLs may have expired → fresh extraction
-                if is_bot_check(last_error):
-                    continue  # try next YouTube player client
+                if job.platform == "youtube" and (is_youtube_retryable(last_error) or "quality_unavailable" in last_error):
+                    continue  # another player client / no cookies may work
                 break
+        if quality and "quality_unavailable" in last_error:
+            want, got, got_label = quality
+            raise MediaError(
+                f"{want}p isn't available for this video right now — the best the source offers is {got_label}p. "
+                f"Please choose {got_label}p or try again later.", "quality_unavailable")
+        if "disk_full" in last_error:
+            raise MediaError("The server doesn't have enough free space for this file right now.", "disk_full")
         code, msg = humanize_error(last_error or "Download failed")
         raise MediaError(msg, code)
 
-    def _attempt(self, job: Job, job_dir: Path, mode: str, clients: list[str] | None, cached: dict | None) -> Path:
+    def _attempt(self, job: Job, job_dir: Path, mode: str, att: Attempt, cached: dict | None) -> Path:
         logger = CollectLogger()
         final_files: list[str] = []
         skip: dict[str, str] = {}
-        with private_cookies(job.platform, job_dir) as cookiefile:
-            opts = self._build_opts(job, logger, clients, skip)
-            opts["paths"] = {"home": str(job_dir), "temp": str(job_dir)}
-            if cookiefile:
-                opts["cookiefile"] = cookiefile
-            plan: dict = {"parts": []}
-            opts["progress_hooks"] = [self._progress_hook(job, plan)]
-            opts["postprocessor_hooks"] = [self._pp_hook(job)]
-            opts["post_hooks"] = [final_files.append]
-            with yt_dlp.YoutubeDL(opts) as ydl:
-                ydl.add_post_processor(_PlanPP(job, plan), when="before_dl")
-                if mode == "cache" and cached is not None:
-                    ydl.process_ie_result(cached, download=True)
-                else:
-                    ydl.download([job.url])
-        if job.cancel_requested:
-            raise DownloadCancelled("Cancelled by user")
+        plan: dict = {"parts": []}
+        job._plan = plan  # type: ignore[attr-defined]
+        try:
+            with private_cookies(job.platform, job_dir, enabled=att.cookies) as cookiefile:
+                opts = self._build_opts(job, logger, att.clients, skip)
+                opts["paths"] = {"home": str(job_dir), "temp": str(job_dir)}
+                if cookiefile:
+                    opts["cookiefile"] = cookiefile
+                opts["progress_hooks"] = [self._progress_hook(job, plan)]
+                opts["postprocessor_hooks"] = [self._pp_hook(job)]
+                opts["post_hooks"] = [final_files.append]
+                with yt_dlp.YoutubeDL(opts) as ydl:
+                    ydl.add_post_processor(_PlanPP(job, plan), when="before_dl")
+                    if mode == "cache" and cached is not None:
+                        ydl.process_ie_result(cached, download=True)
+                    else:
+                        ydl.download([job.url])
+        except DownloadError:
+            job.details = logger.details()
+            raise
+        if self._stop_requested(job):
+            raise DownloadCancelled("stopped")
         if skip:
             raise _Skipped(skip["code"], skip["message"])
         path = self._resolve_output(final_files, job_dir)
         if path:
             return path
+        job.details = logger.details()
         joined = " ".join(logger.errors + logger.warnings)
         raise DownloadError(joined or "Download finished but no file was produced")
 
@@ -453,9 +715,10 @@ class JobManager:
             "extract_flat": False,
             "ignoreerrors": False,
             "skip_download": False,
+            "continuedl": True,
         })
         if settings.max_filesize_mb:
-            opts["max_filesize"] = settings.max_filesize_mb * 1024 * 1024
+            opts["max_filesize"] = settings.max_filesize_mb * MB
 
         limit = settings.max_duration_minutes * 60
 
@@ -479,8 +742,8 @@ class JobManager:
         order: list[str] = []
 
         def hook(d: dict) -> None:
-            if job.cancel_requested:
-                raise DownloadCancelled("Cancelled by user")
+            if job.cancel_requested or job.pause_requested:
+                raise DownloadCancelled("stopped by user")
             info = d.get("info_dict") or {}
             fn = d.get("filename") or d.get("tmpfilename") or "file"
             if fn not in parts:
@@ -537,6 +800,72 @@ class JobManager:
             job.progress = max(job.progress, 99.0)
 
         return hook
+
+    # ------------------------------------------------------------------ photos / carousel items
+    def _run_gallery(self, job: Job, job_dir: Path) -> Path:
+        from .detect import get_gallery
+        from .gallery import StopDownload, build_zip, download_media, item_filename, zip_name
+
+        g = get_gallery(job.url)
+        wanted = set(job.options.get("items") or [])
+        items = [it for it in g["items"] if not wanted or it["index"] in wanted]
+        if not items:
+            raise MediaError("Nothing to download — please select at least one item.", "no_media")
+        if not job.title or job.title.startswith("http"):
+            job.title = (g.get("title") or "")[:200]
+        if not job.thumbnail:
+            job.thumbnail = proxied_image(next((i.get("preview") for i in items if i.get("preview")), None))
+        single = len(items) == 1
+        max_bytes = settings.max_filesize_mb * MB if settings.max_filesize_mb else 0
+        files: list[tuple[Path, str]] = []
+        t0, bytes_before = time.time(), 0
+        stop = lambda: self._stop_requested(job)  # noqa: E731
+        try:
+            for k, it in enumerate(items):
+                name = item_filename(g, it, single)
+                existing = [p for p in job_dir.glob(f"{it['index']:03d}.*") if p.suffix != ".part"]
+                if existing:  # resumed job: already downloaded
+                    files.append((existing[0], f"{name}{existing[0].suffix}"))
+                    bytes_before += existing[0].stat().st_size
+                    continue
+                job.status, job.stage = "downloading", "downloading"
+
+                def on_progress(done: int, total: int, k: int = k) -> None:
+                    frac = min(1.0, done / total) if total else 0.5
+                    job.progress = max(job.progress, min(99.0, round((k + frac) / len(items) * 100, 1)))
+                    job.downloaded = bytes_before + done
+                    elapsed = max(0.5, time.time() - t0)
+                    job.speed = job.downloaded / elapsed
+                    remaining_items = len(items) - k - frac
+                    per_item = job.downloaded / max(0.5, k + frac)
+                    job.eta = int(remaining_items * per_item / job.speed) if job.speed else None
+                    job.total = int(per_item * len(items)) if per_item else 0
+
+                path = download_media(it["url"], job_dir / f"{it['index']:03d}", g.get("referer"), max_bytes,
+                                      on_progress, stop, expect=it["type"])
+                bytes_before += path.stat().st_size
+                files.append((path, f"{name}{path.suffix}"))
+            job.speed = job.eta = None
+            images = [p for p, _ in files if p.suffix.lower() in (".jpg", ".png", ".webp", ".gif", ".avif", ".heic", ".bmp")]
+            job.media = {"items": len(files), "images": len(images), "videos": sum(1 for p, _ in files if p.suffix in (".mp4", ".mov", ".webm")),
+                         "audio": sum(1 for p, _ in files if p.suffix in (".mp3", ".m4a", ".ogg", ".aac"))}
+            if single:
+                path, display = files[0]
+                dims = image_dimensions(path)
+                if dims:
+                    job.media.update({"width": dims[0], "height": dims[1], "format": path.suffix.lstrip(".").upper()})
+                elif path.suffix in (".mp4", ".mov", ".webm", ".mp3", ".m4a"):
+                    job.media.update(media_summary(ffprobe(path)))
+                job.filename = display
+                return path
+            job.status, job.stage = "processing", "zipping"
+            out = build_zip(files, job_dir / "photos.zip", stop)
+            for p, _ in files:
+                p.unlink(missing_ok=True)
+            job.filename = zip_name(g, len(files))
+            return out
+        except StopDownload:
+            raise DownloadCancelled("stopped") from None
 
     @staticmethod
     def _display_name(job: Job, path: Path) -> str:
