@@ -21,21 +21,9 @@ RUN pip install -r requirements.txt
 
 COPY . .
 
-# Repo was uploaded flat (no folders)? Rebuild the folders first.
-RUN python organize.py
-
-# Uploading through GitHub's website can silently drop folders (always, from a phone).
-# Stop here with a clear message instead of a cryptic error later on.
-RUN missing=""; \
-    for f in app/main.py templates/base.html templates/index.html static/js/app.js static/js/core.js static/css/style.css scripts/start.sh; do \
-      [ -f "$f" ] || missing="$missing $f"; \
-    done; \
-    if [ -n "$missing" ]; then \
-      echo "ERROR - missing from the repository:$missing"; \
-      echo "Upload the whole project together with its folders (app/, static/, templates/, scripts/)."; \
-      exit 1; \
-    fi; \
-    sed -i 's/\r$//' scripts/start.sh \
+# Flat-upload safe: move files into their folders (works for flat or normal uploads)
+RUN python unflatten.py \
+ && sed -i 's/\r$//' scripts/start.sh \
  && useradd --create-home --uid 10001 app \
  && mkdir -p /data \
  && chown -R app:app /data /app
