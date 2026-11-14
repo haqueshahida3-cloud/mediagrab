@@ -9,7 +9,7 @@ import secrets
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-VERSION = "2.0.0"
+VERSION = "2.1.0"
 
 
 def _env_int(name: str, default: int) -> int:
@@ -89,10 +89,25 @@ class Settings:
         self.allow_framing: bool = _env_bool("ALLOW_FRAMING", False)  # allow embedding in iframes (dev previews)
         self.max_json_body_kb: int = _env_int("MAX_JSON_BODY_KB", 64)
 
+        # Optional integrations
+        # Telegram bot: create a bot with @BotFather, set TELEGRAM_BOT_TOKEN. The webhook is registered automatically.
+        self.telegram_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+        # comma-separated Telegram user IDs allowed to use the bot (empty = everyone)
+        self.telegram_allowed_ids: set[str] = set(_env_list("TELEGRAM_ALLOWED_IDS", ""))
+        # Render free plan sleeps after ~15 min idle; this pings our own /api/health to keep the service awake.
+        self.render_url: str = os.getenv("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
+        self.keep_awake: bool = _env_bool("KEEP_AWAKE", bool(self.render_url))
+        self.keep_awake_minutes: int = max(1, _env_int("KEEP_AWAKE_MINUTES", 10))
+
         for d in (self.data_dir, self.download_dir, self.tmp_dir, self.cache_dir, self.upload_dir):
             d.mkdir(parents=True, exist_ok=True)
 
         self.secret_key: str = self._load_secret()
+
+    @property
+    def base_url(self) -> str:
+        """Public URL of this deployment (PUBLIC_BASE_URL, else Render's own URL)."""
+        return self.public_base_url or self.render_url
 
     @property
     def admin_enabled(self) -> bool:

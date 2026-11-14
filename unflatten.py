@@ -59,7 +59,9 @@ MANIFEST = {
  "how-to-use.html": "templates/pages/how-to-use.html",
  "privacy.html": "templates/pages/privacy.html",
  "terms.html": "templates/pages/terms.html",
- "api-docs.html": "templates/pages/api-docs.html"
+ "api-docs.html": "templates/pages/api-docs.html",
+ "keepalive.py": "app/keepalive.py",
+ "telegram_bot.py": "app/telegram_bot.py"
 }
 
 moved = 0
