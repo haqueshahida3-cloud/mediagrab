@@ -60,8 +60,7 @@ MANIFEST = {
  "privacy.html": "templates/pages/privacy.html",
  "terms.html": "templates/pages/terms.html",
  "api-docs.html": "templates/pages/api-docs.html",
- "keepalive.py": "app/keepalive.py",
- "telegram_bot.py": "app/telegram_bot.py"
+ "keepalive.py": "app/keepalive.py"
 }
 
 moved = 0

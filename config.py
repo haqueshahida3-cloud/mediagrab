@@ -9,7 +9,7 @@ import secrets
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-VERSION = "2.1.0"
+VERSION = "2.1.1"
 
 
 def _env_int(name: str, default: int) -> int:
@@ -90,10 +90,6 @@ class Settings:
         self.max_json_body_kb: int = _env_int("MAX_JSON_BODY_KB", 64)
 
         # Optional integrations
-        # Telegram bot: create a bot with @BotFather, set TELEGRAM_BOT_TOKEN. The webhook is registered automatically.
-        self.telegram_token: str = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
-        # comma-separated Telegram user IDs allowed to use the bot (empty = everyone)
-        self.telegram_allowed_ids: set[str] = set(_env_list("TELEGRAM_ALLOWED_IDS", ""))
         # Render free plan sleeps after ~15 min idle; this pings our own /api/health to keep the service awake.
         self.render_url: str = os.getenv("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
         self.keep_awake: bool = _env_bool("KEEP_AWAKE", bool(self.render_url))

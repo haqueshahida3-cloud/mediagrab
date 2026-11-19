@@ -23,7 +23,7 @@ from starlette.middleware.gzip import DEFAULT_EXCLUDED_CONTENT_TYPES, GZipMiddle
 from starlette.exceptions import HTTPException as StarletteHTTPException
 from starlette.concurrency import run_in_threadpool
 
-from . import pages, telegram_bot
+from . import pages
 from .admin import router as admin_router
 from .config import settings
 from .detect import analyze
@@ -81,14 +81,12 @@ async def lifespan(_: FastAPI):
     )
     await run_in_threadpool(manager.cleanup)
     task = asyncio.create_task(_janitor())
-    extras = [asyncio.create_task(keep_awake_loop()), asyncio.create_task(telegram_bot.setup_webhook())]
+    keep_awake = asyncio.create_task(keep_awake_loop())
     try:
         yield
     finally:
         task.cancel()
-        for t in extras:
-            t.cancel()
-        await telegram_bot.close()
+        keep_awake.cancel()
         await http_client.aclose()
         manager.shutdown()
 
@@ -543,7 +541,6 @@ async def tools_delete(upload_id: str):
 
 # ---------------------------------------------------------------------------- admin + pages + static
 app.include_router(admin_router)
-app.include_router(telegram_bot.router)
 app.include_router(pages.router)
 app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
 monitor.count("boot")
