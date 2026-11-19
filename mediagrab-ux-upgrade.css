@@ -1,0 +1,10 @@
+/* MediaGrab UX upgrade styling. Loaded after the existing stylesheet. */
+:root { --mg-user-font: Inter, system-ui, sans-serif; }
+body { font-family: var(--mg-user-font); }
+.mg-ux-card { backdrop-filter: blur(12px); transition: transform .18s ease, box-shadow .18s ease; }
+.mg-ux-card:hover { transform: translateY(-2px); box-shadow: 0 12px 28px rgba(0,0,0,.08); }
+.mg-ux-row select, .mg-ux-row button { cursor: pointer; border: 1px solid currentColor; background: transparent; color: inherit; }
+.mg-ux-row button:focus-visible, .mg-ux-row select:focus-visible { outline: 3px solid #4f8cff; outline-offset: 2px; }
+.mg-high-contrast { --mg-contrast-border: 2px; }
+.mg-high-contrast a, .mg-high-contrast button { text-decoration-thickness: 2px; }
+.mg-empty { min-height: 80px; display: grid; place-content: center; }
