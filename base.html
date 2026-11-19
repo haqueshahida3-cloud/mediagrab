@@ -34,7 +34,8 @@
   <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
   <link rel="preload" href="/static/fonts/inter-latin-400-800.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
-  {% if key == "home" %}<link rel="stylesheet" href="/static/css/dashboard-addon.css?v=1">{% endif %}
+  <link rel="stylesheet" href="/static/css/dashboard-addon.css?v={{ version }}">
+  <link rel="stylesheet" href="/static/css/mediagrab-ux-upgrade.css?v={{ version }}">
   <script src="/static/js/boot.js?v={{ version }}"></script>
   <script type="application/ld+json">{{ ldjson({"@context": "https://schema.org", "@type": "Organization", "name": app_name, "url": base + "/", "logo": base + "/static/icons/icon-512.png"}) }}</script>
   {% block jsonld %}{% endblock %}
@@ -49,6 +50,8 @@
   {% block overlays %}{% endblock %}
   <div id="modal" class="modal hidden" role="dialog" aria-modal="true"></div>
   <div id="toasts" class="toasts" aria-live="polite"></div>
+  <script type="module" src="/static/js/mediagrab-ux-upgrade.js?v={{ version }}"></script>
+  <script type="module" src="/static/js/dashboard-addon.js?v={{ version }}"></script>
   {% block scripts %}<script type="module" src="/static/js/page.js?v={{ version }}"></script>{% endblock %}
 </body>
 </html>
