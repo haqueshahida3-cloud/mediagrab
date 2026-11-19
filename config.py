@@ -9,7 +9,7 @@ import secrets
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-VERSION = "2.1.1"
+VERSION = "2.1.2"
 
 
 def _env_int(name: str, default: int) -> int:
