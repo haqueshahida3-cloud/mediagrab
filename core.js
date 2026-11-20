@@ -124,7 +124,7 @@ export function detectPlatform(url) {
 export const pname = (p) => (PLATFORM_META[p] || PLATFORM_META.other).name;
 
 /* ------------------------------------------------------------------ API */
-export async function api(path, { method = 'GET', body, raw = false, headers = {}, signal } = {}) {
+export async function api(path, { method = 'GET', body, raw = false, headers = {}, signal, _retried = false } = {}) {
   let res;
   try {
     res = await fetch(path, {
@@ -141,8 +141,14 @@ export async function api(path, { method = 'GET', body, raw = false, headers = {
   if (raw && res.ok) return res;
   let data = null;
   try { data = await res.json(); } catch { /* not json */ }
+  if (!res.ok && res.status === 403 && data?.code === 'bot_check_required' && !_retried) {
+    // invisible bot protection: run the check once, then repeat the request
+    await (await import('./botguard.js')).ensureHuman();
+    return api(path, { method, body, raw, headers, signal, _retried: true });
+  }
   if (!res.ok) {
-    const err = new Error((data && data.error) || t('err.server', { s: res.status }));
+    const local = data?.code ? t(`e2.${data.code}`) : '';  // translated message for codes that have an "e2." entry
+    const err = new Error((local && local !== `e2.${data.code}` ? local : data && data.error) || t('err.server', { s: res.status }));
     err.code = (data && data.code) || `http_${res.status}`;
     err.status = res.status;
     throw err;
@@ -151,7 +157,17 @@ export async function api(path, { method = 'GET', body, raw = false, headers = {
 }
 
 /** Upload a File with progress (XHR gives upload progress events, fetch doesn't). */
-export function uploadFile(file, onProgress) {
+export async function uploadFile(file, onProgress) {
+  try {
+    return await uploadOnce(file, onProgress);
+  } catch (e) {
+    if (e.code !== 'bot_check_required') throw e;
+    await (await import('./botguard.js')).ensureHuman();  // invisible bot protection, then try again
+    return uploadOnce(file, onProgress);
+  }
+}
+
+function uploadOnce(file, onProgress) {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open('POST', '/api/tools/upload');

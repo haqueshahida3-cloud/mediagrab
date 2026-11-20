@@ -1,6 +1,7 @@
 {% extends "base.html" %}
 {% import "_macros.html" as m with context %}
 {% set ttl = settings.file_ttl_minutes %}
+{% set bot_name = "Cloudflare Turnstile" if settings.bot_provider == "turnstile" else "Google reCAPTCHA" %}
 {% block main %}
 {% if lang == "bn" %}
 {{ m.page_hero("প্রাইভেসি পলিসি", "সংক্ষেপে: আমরা প্রায় কিছুই সংরক্ষণ করি না।") }}
@@ -10,8 +11,8 @@
   <h2>আপনার ডিভাইসে যা থাকে</h2>
   <p>সেটিংস (থিম, ভাষা, পছন্দ), খোলা লিংকের হিস্ট্রি ও সম্প্রতি ডাউনলোড করা ফাইলের তালিকা শুধু আপনার ব্রাউজারের localStorage-এ থাকে। ব্যাকগ্রাউন্ডের নিজস্ব ছবি IndexedDB-তে থাকে। সেটিংস থেকে যেকোনো সময় সব মুছে ফেলতে পারবেন।</p>
   <h2>কুকি</h2>
-  <ul><li><code>mg_lang</code> — আপনার ভাষা মনে রাখার জন্য।</li><li><code>mg_admin</code> — শুধু সাইটের অ্যাডমিন লগইন করলে (HttpOnly, ৮ ঘণ্টা)।</li></ul>
-  <p>কোনো ট্র্যাকিং বা থার্ড-পার্টি কুকি নেই।</p>
+  <ul><li><code>mg_lang</code> — আপনার ভাষা মনে রাখার জন্য।</li><li><code>mg_admin</code> — শুধু সাইটের অ্যাডমিন লগইন করলে (HttpOnly, ৮ ঘণ্টা)।</li>{% if settings.bot_enabled %}<li><code>mg_human</code> — দ্রুত বট-যাচাই পাশ করার প্রমাণ (HttpOnly, {{ settings.bot_pass_minutes }} মিনিট)।</li>{% endif %}</ul>
+  {% if settings.bot_enabled %}<p>MediaGrab কোনো ট্র্যাকিং কুকি সেট করে না। বট-যাচাই করে {{ bot_name }}; এটি নিজের কুকি সেট করতে পারে এবং চলার সময় আপনার IP ঠিকানা ও ব্রাউজারের কারিগরি তথ্য পায়।</p>{% else %}<p>কোনো ট্র্যাকিং বা থার্ড-পার্টি কুকি নেই।</p>{% endif %}
   <h2>সার্ভারে যা প্রসেস হয়</h2>
   <ul>
     <li><b>আপনার দেওয়া লিংক</b> — মিডিয়া খুঁজতে ব্যবহার হয়; সাময়িক ক্যাশে সর্বোচ্চ ১৫ মিনিট থাকে।</li>
@@ -33,8 +34,8 @@
   <h2>Stored on your device</h2>
   <p>Your settings (theme, language, preferences), the history of links you opened and the list of recent downloads live only in your browser's localStorage. A custom background image is kept in IndexedDB. You can erase all of it at any time from Settings.</p>
   <h2>Cookies</h2>
-  <ul><li><code>mg_lang</code> — remembers your language.</li><li><code>mg_admin</code> — only set when the site administrator signs in (HttpOnly, 8 hours).</li></ul>
-  <p>There are no tracking or third-party cookies.</p>
+  <ul><li><code>mg_lang</code> — remembers your language.</li><li><code>mg_admin</code> — only set when the site administrator signs in (HttpOnly, 8 hours).</li>{% if settings.bot_enabled %}<li><code>mg_human</code> — proves that a quick bot check was passed (HttpOnly, {{ settings.bot_pass_minutes }} minutes).</li>{% endif %}</ul>
+  {% if settings.bot_enabled %}<p>MediaGrab sets no tracking cookies. The bot check is provided by {{ bot_name }}, which may set its own cookies and receives technical data such as your IP address and browser details while it runs.</p>{% else %}<p>There are no tracking or third-party cookies.</p>{% endif %}
   <h2>Processed on the server</h2>
   <ul>
     <li><b>Links you submit</b> — used to find the media; kept in a temporary cache for up to 15 minutes.</li>

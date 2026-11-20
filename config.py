@@ -9,7 +9,7 @@ import secrets
 from pathlib import Path
 
 BASE_DIR = Path(__file__).resolve().parent.parent
-VERSION = "2.1.2"
+VERSION = "2.2.0"
 
 
 def _env_int(name: str, default: int) -> int:
@@ -90,6 +90,17 @@ class Settings:
         self.max_json_body_kb: int = _env_int("MAX_JSON_BODY_KB", 64)
 
         # Optional integrations
+        # Invisible bot protection (off unless provider + both keys are set): turnstile | recaptcha
+        self.bot_provider: str = os.getenv("BOT_PROTECTION", "").strip().lower()
+        self.bot_site_key: str = os.getenv("BOT_SITE_KEY", "").strip()
+        self.bot_secret_key: str = os.getenv("BOT_SECRET_KEY", "").strip()
+        try:
+            self.bot_min_score: float = min(1.0, max(0.0, float(os.getenv("BOT_MIN_SCORE", "0.5"))))  # reCAPTCHA v3 only
+        except ValueError:
+            self.bot_min_score = 0.5
+        self.bot_pass_minutes: int = max(5, _env_int("BOT_PASS_MINUTES", 30))
+        self.bot_fail_open: bool = _env_bool("BOT_FAIL_OPEN", False)  # let people in if the provider is unreachable
+
         # Render free plan sleeps after ~15 min idle; this pings our own /api/health to keep the service awake.
         self.render_url: str = os.getenv("RENDER_EXTERNAL_URL", "").strip().rstrip("/")
         self.keep_awake: bool = _env_bool("KEEP_AWAKE", bool(self.render_url))
@@ -104,6 +115,10 @@ class Settings:
     def base_url(self) -> str:
         """Public URL of this deployment (PUBLIC_BASE_URL, else Render's own URL)."""
         return self.public_base_url or self.render_url
+
+    @property
+    def bot_enabled(self) -> bool:
+        return self.bot_provider in ("turnstile", "recaptcha") and bool(self.bot_site_key and self.bot_secret_key)
 
     @property
     def admin_enabled(self) -> bool:

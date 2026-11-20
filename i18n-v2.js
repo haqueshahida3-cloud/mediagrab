@@ -107,6 +107,11 @@ export const EXTRA = {
     'tl.gpsWarn': 'This photo contains GPS location data. Remove it before sharing if you want to keep the place private — the Image converter strips all metadata.',
     'tl.withAudio': 'with audio', 'tl.videoOnly': 'video only', 'tl.audioOnly': 'audio only', 'tl.approx': 'approx.',
     'rc.copyCaption': 'Copy caption', 'rc.copyCaptionTip': 'Copy the post caption with its hashtags',
+    // bot protection
+    'e2.bot_failed': 'We could not confirm that you are human. Please reload the page and try again.',
+    'e2.bot_check_required': 'Please complete the quick human check and try again.',
+    'bot.rcPre': 'This site is protected by reCAPTCHA and the Google', 'bot.rcPrivacy': 'Privacy Policy', 'bot.rcAnd': 'and',
+    'bot.rcTerms': 'Terms of Service', 'bot.rcPost': 'apply.',
   },
   bn: {
     'hero.title': '{p} থেকে ভিডিও ও ছবি<br>ডাউনলোড করুন', 'err.offline': 'আপনি অফলাইনে আছেন — ইন্টারনেট সংযোগ দেখুন।',
@@ -200,5 +205,10 @@ export const EXTRA = {
     'tl.gpsWarn': 'এই ছবিতে GPS লোকেশন তথ্য আছে। জায়গাটি গোপন রাখতে চাইলে শেয়ার করার আগে মুছে ফেলুন — ছবি কনভার্টার সব মেটাডেটা মুছে দেয়।',
     'tl.withAudio': 'অডিওসহ', 'tl.videoOnly': 'শুধু ভিডিও', 'tl.audioOnly': 'শুধু অডিও', 'tl.approx': 'প্রায়',
     'rc.copyCaption': 'ক্যাপশন কপি', 'rc.copyCaptionTip': 'হ্যাশট্যাগসহ পোস্টের ক্যাপশন কপি করুন',
+    // bot protection
+    'e2.bot_failed': 'আপনি মানুষ কি না তা নিশ্চিত করা যায়নি। পেজটি রিলোড করে আবার চেষ্টা করুন।',
+    'e2.bot_check_required': 'অনুগ্রহ করে দ্রুত মানুষ-যাচাইটি সম্পন্ন করে আবার চেষ্টা করুন।',
+    'bot.rcPre': 'এই সাইটটি reCAPTCHA দ্বারা সুরক্ষিত এবং Google-এর', 'bot.rcPrivacy': 'গোপনীয়তা নীতি', 'bot.rcAnd': 'ও',
+    'bot.rcTerms': 'পরিষেবার শর্তাবলী', 'bot.rcPost': 'প্রযোজ্য।',
   },
 };

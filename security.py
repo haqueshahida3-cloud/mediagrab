@@ -4,6 +4,7 @@ from __future__ import annotations
 from fastapi import Request
 from fastapi.responses import JSONResponse, RedirectResponse
 
+from . import botguard
 from .config import settings
 
 MB = 1024 * 1024
@@ -16,20 +17,34 @@ def is_https(request: Request) -> bool:
     return proto.split(",")[0].strip() == "https" or request.url.scheme == "https"
 
 
+_BOT_CSP = {  # extra sources the chosen provider needs (only added when bot protection is on)
+    "turnstile": {"script-src": ["https://challenges.cloudflare.com"], "frame-src": ["https://challenges.cloudflare.com"]},
+    "recaptcha": {"script-src": ["https://www.google.com/recaptcha/", "https://www.gstatic.com/recaptcha/"],
+                  "frame-src": ["https://www.google.com/recaptcha/", "https://recaptcha.google.com/recaptcha/"],
+                  "connect-src": ["https://www.google.com/recaptcha/"], "img-src": ["https://www.gstatic.com/recaptcha/"]},
+}
+
+
 def csp(https: bool) -> str:
+    extra = _BOT_CSP.get(settings.bot_provider, {}) if settings.bot_enabled else {}
+
+    def src(name: str, base: str) -> str:
+        return " ".join([base, *extra.get(name, [])])
+
     parts = [
         "default-src 'self'",
-        "script-src 'self'",
+        src("script-src", "script-src 'self'"),
         "style-src 'self' 'unsafe-inline'",
-        "img-src 'self' data: blob:",
+        src("img-src", "img-src 'self' data: blob:"),
         "media-src 'self' blob:",
         "font-src 'self' data:",
-        "connect-src 'self'",
+        src("connect-src", "connect-src 'self'"),
         "worker-src 'self' blob:",
         "manifest-src 'self'",
         "object-src 'none'",
         "base-uri 'self'",
         "form-action 'self'",
+        *([src("frame-src", "frame-src")] if extra.get("frame-src") else []),
         f"frame-ancestors {'*' if settings.allow_framing else chr(39) + 'self' + chr(39)}",
     ]
     if https:
@@ -55,6 +70,10 @@ async def security_middleware(request: Request, call_next):
         if length is None and path != UPLOAD_PATH and request.headers.get("transfer-encoding"):
             return JSONResponse({"error": "Chunked request bodies are not accepted.", "code": "length_required"},
                                 status_code=411)
+
+    # 3) Invisible bot protection (no-op unless BOT_PROTECTION + keys are configured)
+    if botguard.blocks(request):
+        return botguard.blocked_response()
 
     response = await call_next(request)
 

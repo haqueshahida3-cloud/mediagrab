@@ -20,6 +20,9 @@
         <li><a href="/terms" data-i18n="nav.terms">{{ t.terms }}</a></li>
         <li><a href="/dmca" data-i18n="nav.dmca">{{ t.dmca }}</a></li></ul></div>
     </div>
+    {% if settings.bot_enabled and settings.bot_provider == "recaptcha" %}
+    <p class="disclaimer" style="margin:14px 0 0;font-size:.78rem"><span data-i18n="bot.rcPre">This site is protected by reCAPTCHA and the Google</span> <a href="https://policies.google.com/privacy" target="_blank" rel="noopener noreferrer" data-i18n="bot.rcPrivacy">Privacy Policy</a> <span data-i18n="bot.rcAnd">and</span> <a href="https://policies.google.com/terms" target="_blank" rel="noopener noreferrer" data-i18n="bot.rcTerms">Terms of Service</a> <span data-i18n="bot.rcPost">apply.</span></p>
+    {% endif %}
     <div class="footer-bottom">
       <span>© {{ year }} {{ app_name }}. <span data-i18n="footer.rights">{{ t.rights }}</span></span>
       <span id="footerVersion">v{{ version }}</span>

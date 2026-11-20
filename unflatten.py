@@ -71,7 +71,9 @@ MANIFEST = {
  "dashboard-addon.css": "static/css/dashboard-addon.css",
  "mediagrab-ux-upgrade.css": "static/css/mediagrab-ux-upgrade.css",
  "dashboard-addon.js": "static/js/dashboard-addon.js",
- "mediagrab-ux-upgrade.js": "static/js/mediagrab-ux-upgrade.js"
+ "mediagrab-ux-upgrade.js": "static/js/mediagrab-ux-upgrade.js",
+ "botguard.py": "app/botguard.py",
+ "botguard.js": "static/js/botguard.js"
 }
 
 OPTIONAL_ASSETS = ["static/js/mediagrab-ux-upgrade.js", "static/js/dashboard-addon.js",
