@@ -284,7 +284,7 @@ def build_single(info: dict, source_url: str) -> dict:
         "url": source_url,
         "webpage_url": info.get("webpage_url") or source_url,
         "title": title,
-        "description": (info.get("description") or "")[:1500],
+        "description": (info.get("description") or "")[:5000],
         "uploader": info.get("uploader") or info.get("channel") or info.get("creator") or info.get("uploader_id"),
         "uploader_url": info.get("uploader_url") or info.get("channel_url"),
         "verified": bool(info.get("channel_is_verified")),

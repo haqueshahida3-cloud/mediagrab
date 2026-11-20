@@ -312,6 +312,7 @@ function renderVideo(d, keepTab = false) {
         <div class="rc-links">
           <a class="chip-btn" href="${esc(d.webpage_url)}" target="_blank" rel="noopener noreferrer">${icon('external')}${esc(t('rc.open'))}</a>
           <button class="chip-btn" type="button" data-copy="${esc(d.webpage_url)}">${icon('copy')}${esc(t('rc.copy'))}</button>
+          ${captionBtn(d)}
           ${navigator.share ? `<button class="chip-btn" type="button" id="shareBtn">${icon('share')}${esc(t('rc.share'))}</button>` : ''}
         </div>
       </div>
@@ -593,6 +594,9 @@ async function downloadSubtitle(btn, d) {
 }
 
 /* ------------------------------------------------------------------ photo / carousel / album / mixed view */
+const captionOf = (d) => (d.description || '').trim() || (d.title && d.title !== 'Untitled' ? d.title.trim() : '');
+const captionBtn = (d) => { const c = captionOf(d); return c ? `<button class="chip-btn" type="button" data-copy="${esc(c)}" title="${esc(t('rc.copyCaptionTip'))}">${icon('copy')}${esc(t('rc.copyCaption'))}</button>` : ''; };
+
 function renderGallery(d, keep = false) {
   const visual = d.items.filter((i) => i.type !== 'audio');
   if (!keep) state.gsel = new Set(visual.map((i) => i.index));
@@ -612,6 +616,7 @@ function renderGallery(d, keep = false) {
         <div class="rc-kickers">${mtBadge(d.media_type)}<span class="pl-kicker pf-${esc(d.platform)}">${brandIcon(d.platform)}${esc(pname(d.platform))}</span></div>
         <h2>${esc(d.title)}</h2>
         <div class="g-sub">${sub}</div>
+        ${captionOf(d) ? `<div class="rc-links" style="margin-top:10px">${captionBtn(d)}</div>` : ''}
       </div>
     </div>
     ${note ? `<div class="max-note warn" style="margin-top:14px">${icon('info')}<div>${esc(note)}</div></div>` : ''}

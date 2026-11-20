@@ -106,6 +106,7 @@ export const EXTRA = {
     'tl.noAudio': 'This file has no audio track.', 'tl.hdr': 'HDR', 'tl.best': 'best', 'tl.streams': 'Streams', 'tl.chapters': 'Chapters',
     'tl.gpsWarn': 'This photo contains GPS location data. Remove it before sharing if you want to keep the place private — the Image converter strips all metadata.',
     'tl.withAudio': 'with audio', 'tl.videoOnly': 'video only', 'tl.audioOnly': 'audio only', 'tl.approx': 'approx.',
+    'rc.copyCaption': 'Copy caption', 'rc.copyCaptionTip': 'Copy the post caption with its hashtags',
   },
   bn: {
     'hero.title': '{p} থেকে ভিডিও ও ছবি<br>ডাউনলোড করুন', 'err.offline': 'আপনি অফলাইনে আছেন — ইন্টারনেট সংযোগ দেখুন।',
@@ -198,5 +199,6 @@ export const EXTRA = {
     'tl.noAudio': 'এই ফাইলে কোনো অডিও ট্র্যাক নেই।', 'tl.hdr': 'HDR', 'tl.best': 'সেরা', 'tl.streams': 'স্ট্রিম', 'tl.chapters': 'চ্যাপ্টার',
     'tl.gpsWarn': 'এই ছবিতে GPS লোকেশন তথ্য আছে। জায়গাটি গোপন রাখতে চাইলে শেয়ার করার আগে মুছে ফেলুন — ছবি কনভার্টার সব মেটাডেটা মুছে দেয়।',
     'tl.withAudio': 'অডিওসহ', 'tl.videoOnly': 'শুধু ভিডিও', 'tl.audioOnly': 'শুধু অডিও', 'tl.approx': 'প্রায়',
+    'rc.copyCaption': 'ক্যাপশন কপি', 'rc.copyCaptionTip': 'হ্যাশট্যাগসহ পোস্টের ক্যাপশন কপি করুন',
   },
 };
