@@ -36,6 +36,7 @@
   <link rel="stylesheet" href="/static/css/style.css?v={{ version }}">
   <link rel="stylesheet" href="/static/css/dashboard-addon.css?v={{ version }}">
   <link rel="stylesheet" href="/static/css/mediagrab-ux-upgrade.css?v={{ version }}">
+  <link rel="stylesheet" href="/static/css/button-effects.css?v={{ version }}">
   <script src="/static/js/boot.js?v={{ version }}"></script>
   <script type="application/ld+json">{{ ldjson({"@context": "https://schema.org", "@type": "Organization", "name": app_name, "url": base + "/", "logo": base + "/static/icons/icon-512.png"}) }}</script>
   {% block jsonld %}{% endblock %}
@@ -52,6 +53,7 @@
   <div id="toasts" class="toasts" aria-live="polite"></div>
   <script type="module" src="/static/js/mediagrab-ux-upgrade.js?v={{ version }}"></script>
   <script type="module" src="/static/js/dashboard-addon.js?v={{ version }}"></script>
+  <script type="module" src="/static/js/button-effects.js?v={{ version }}"></script>
   {% block scripts %}<script type="module" src="/static/js/page.js?v={{ version }}"></script>{% endblock %}
 </body>
 </html>

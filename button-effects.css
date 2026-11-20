@@ -1,0 +1,123 @@
+/* MediaGrab Button Effects
+ * 12 effects, each a utility class that button-effects.js adds to the site's buttons (or that you can add by hand):
+ *   fx-magnetic  fx-ripple  fx-elastic  fx-liquid  fx-gradient  fx-glow
+ *   fx-shimmer   fx-slide   fx-arrow    fx-morph   fx-press     fx-bounce
+ * Everything is scoped to html.mgfx. The script only sets that class when the visitor has not asked for reduced
+ * motion (OS setting or the site's "Reduce motion") and has not switched the effects off.
+ */
+
+/* ---------- shared base ---------- */
+/* :where() keeps specificity at zero, so a button that is already positioned (fixed / absolute) keeps its position */
+:where(.mgfx .fx-ripple, .mgfx .fx-shimmer, .mgfx .fx-liquid, .mgfx .fx-slide) {
+  position: relative;
+  overflow: hidden;
+  isolation: isolate;
+}
+/* one transition list for every effect: transform (3D press), translate (magnetic / bounce), scale (elastic) */
+.mgfx .fxb {
+  transition-property: transform, translate, scale, box-shadow, background, color, border-color, opacity;
+  transition-duration: .2s, .45s, .55s, .25s, .38s, .2s, .2s, .2s;
+  transition-timing-function: var(--ease), cubic-bezier(.34, 1.56, .64, 1), cubic-bezier(.34, 1.9, .5, 1), var(--ease), var(--ease), ease, ease, ease;
+}
+
+/* ---------- 1. magnetic: the button leans toward the pointer (JS sets --mx / --my) ---------- */
+.mgfx .fx-magnetic { translate: var(--mx, 0px) var(--my, 0px); will-change: translate; }
+
+/* ---------- 2. ripple click ---------- */
+.mgfx-ripple {
+  position: absolute; z-index: 2; border-radius: 50%; pointer-events: none;
+  background: currentColor; opacity: .3; transform: scale(0);
+  animation: mgfx-ripple .65s ease-out forwards;
+}
+@keyframes mgfx-ripple { to { transform: scale(1); opacity: 0; } }
+
+/* ---------- 3. elastic: squashes while pressed, springs back with overshoot ---------- */
+.mgfx .fx-elastic.is-down:not([disabled]) { scale: .91; }
+
+/* ---------- 4. liquid: a wobbling blob rises from below on hover ---------- */
+.mgfx .fx-liquid::before {
+  content: ""; position: absolute; z-index: -1; left: 50%; top: 108%;
+  width: 150%; aspect-ratio: 1; translate: -50% 0;
+  background: var(--grad); border-radius: 44% 56% 52% 48% / 46% 44% 56% 54%;
+  transition: top .6s var(--ease);
+  animation: mgfx-blob 5s linear infinite; animation-play-state: paused;
+  pointer-events: none;
+}
+.mgfx .fx-liquid:active:not([disabled])::before { top: -45%; animation-play-state: running; }
+.mgfx .fx-liquid:active:not([disabled]) { color: #fff; border-color: transparent; }
+@media (hover: hover) {
+  .mgfx .fx-liquid:hover:not([disabled])::before, .mgfx .fx-liquid:focus-visible::before { top: -45%; animation-play-state: running; }
+  .mgfx .fx-liquid:hover:not([disabled]), .mgfx .fx-liquid:focus-visible { color: #fff; border-color: transparent; }
+}
+@keyframes mgfx-blob { to { rotate: 360deg; } }
+
+/* ---------- 5. animated gradient (the brand gradient drifts) ---------- */
+.mgfx .fx-gradient { background-size: 220% 220%; animation: mgfx-gradient 6s ease-in-out infinite; }
+@keyframes mgfx-gradient { 0%, 100% { background-position: 0% 50%; } 50% { background-position: 100% 50%; } }
+
+/* ---------- 6. glow pulse ---------- */
+.mgfx .fx-glow { animation: mgfx-glow 2.6s ease-in-out infinite; }
+.mgfx .fx-gradient.fx-glow { animation: mgfx-gradient 6s ease-in-out infinite, mgfx-glow 2.6s ease-in-out infinite; }
+@keyframes mgfx-glow {
+  0%, 100% { box-shadow: 0 8px 24px -8px color-mix(in srgb, var(--a2) 60%, transparent), 0 0 0 0 color-mix(in srgb, var(--a2) 0%, transparent); }
+  50% { box-shadow: 0 10px 32px -4px color-mix(in srgb, var(--a2) 85%, transparent), 0 0 0 7px color-mix(in srgb, var(--a2) 14%, transparent); }
+}
+.mgfx .fx-glow[disabled], .mgfx .fx-gradient[disabled] { animation: none; }
+
+/* ---------- 7. shimmer: a soft highlight sweeps across now and then ---------- */
+.mgfx .fx-shimmer::after {
+  content: ""; position: absolute; inset: 0; z-index: 1; pointer-events: none;
+  background: linear-gradient(105deg, transparent 38%, rgba(255, 255, 255, .38) 50%, transparent 62%);
+  transform: translateX(-130%) skewX(-12deg);
+  animation: mgfx-shimmer 3.8s ease-in-out infinite;
+}
+@keyframes mgfx-shimmer { 0%, 55% { transform: translateX(-130%) skewX(-12deg); } 100% { transform: translateX(130%) skewX(-12deg); } }
+.mgfx .fx-shimmer[disabled]::after { display: none; }
+
+/* ---------- 8. sliding background: a gradient slides in from the left ---------- */
+.mgfx .fx-slide {
+  background-image: linear-gradient(135deg, var(--a1), var(--a2));
+  background-repeat: no-repeat; background-position: left center; background-size: 0% 100%;
+}
+.mgfx .fx-slide:active:not([disabled]) { background-size: 100% 100%; color: #fff; border-color: transparent; }
+@media (hover: hover) {
+  .mgfx .fx-slide:hover:not([disabled]), .mgfx .fx-slide:focus-visible { background-size: 100% 100%; color: #fff; border-color: transparent; }
+}
+
+/* ---------- 9. arrow movement (JS tags the arrow icon with .mgfx-arrow-ic) ---------- */
+.mgfx .fxb .mgfx-arrow-ic { transition: translate .28s cubic-bezier(.34, 1.56, .64, 1); }
+@media (hover: hover) {
+  .mgfx .fx-arrow:hover:not([disabled]) .mgfx-arrow-ic { translate: 6px 0; }
+}
+.mgfx .fx-arrow:active:not([disabled]) .mgfx-arrow-ic { translate: 9px 0; }
+
+/* ---------- 10. icon morphing (copy → check, or any data-fx-morph="icon-name") ---------- */
+.mgfx-morph-in { color: var(--ok); animation: mgfx-morph-in .5s cubic-bezier(.34, 1.56, .64, 1) both; }
+@keyframes mgfx-morph-in {
+  from { rotate: -180deg; scale: .2; opacity: 0; }
+  60% { rotate: 12deg; scale: 1.25; opacity: 1; }
+  to { rotate: 0deg; scale: 1; opacity: 1; }
+}
+
+/* ---------- 11. 3D press: tilts away and sinks while pressed ---------- */
+.mgfx .fx-press:active:not([disabled]) {
+  transform: perspective(520px) translateY(3px) rotateX(14deg) scale(.985);
+  box-shadow: inset 0 -2px 0 rgba(0, 0, 0, .25), inset 0 3px 10px rgba(0, 0, 0, .28);
+}
+
+/* ---------- 12. bounce: icon buttons and chips hop on hover and on tap ---------- */
+@keyframes mgfx-bounce { 0%, 100% { translate: 0 0; } 30% { translate: 0 -7px; } 55% { translate: 0 0; } 75% { translate: 0 -3px; } }
+@media (hover: hover) {
+  .mgfx .fx-bounce:hover:not([disabled]) { animation: mgfx-bounce .6s var(--ease); }
+}
+.mgfx .fx-bounce.is-bounce { animation: mgfx-bounce .6s var(--ease); }
+
+/* ---------- "Button animations" switch in the UX preferences card ---------- */
+.mgfx-toggle-row { margin-top: 12px; }
+
+/* never animate for people who asked for less motion (the site's global rules already cut durations;
+   this also removes the continuous effects and the hover movement entirely) */
+@media (prefers-reduced-motion: reduce) {
+  .fxb, .fxb::before, .fxb::after { animation: none !important; translate: none !important; scale: none !important; }
+}
+[data-motion="reduce"] .fxb, [data-motion="reduce"] .fxb::before, [data-motion="reduce"] .fxb::after { animation: none !important; translate: none !important; scale: none !important; }
