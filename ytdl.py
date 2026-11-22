@@ -324,6 +324,8 @@ def _slim_ig_product(p: dict) -> dict:
     user = p.get("user") or {}
     out["username"] = user.get("username")
     out["full_name"] = user.get("full_name")
+    out["avatar"] = user.get("profile_pic_url") if str(user.get("profile_pic_url") or "").startswith("https://") else None
+    out["verified"] = bool(user.get("is_verified"))
     out["caption"] = ((p.get("caption") or {}).get("text") or "")[:2000]
     out["taken_at"] = p.get("taken_at")
     return out

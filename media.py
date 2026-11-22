@@ -4,6 +4,7 @@ from __future__ import annotations
 from urllib.parse import parse_qs, urlparse
 
 from .config import settings
+from . import account
 from .utils import detect_platform, proxied_image, clean_title
 from .ytdl import POPULAR_SUB_LANGS
 
@@ -288,6 +289,7 @@ def build_single(info: dict, source_url: str) -> dict:
         "uploader": info.get("uploader") or info.get("channel") or info.get("creator") or info.get("uploader_id"),
         "uploader_url": info.get("uploader_url") or info.get("channel_url"),
         "verified": bool(info.get("channel_is_verified")),
+        "account": account.public(account.from_ytdlp(info, platform)),
         "thumbnail": proxied_image(info.get("thumbnail")),
         "duration": duration,
         "view_count": info.get("view_count"),
@@ -387,6 +389,7 @@ def build_gallery(g: dict, source_url: str) -> dict:
         "description": g.get("description") or "",
         "uploader": g.get("uploader"),
         "uploader_url": g.get("uploader_url"),
+        "account": account.public(g.get("account")),
         "upload_date": g.get("upload_date"),
         "thumbnail": cover,
         "count": len(items),

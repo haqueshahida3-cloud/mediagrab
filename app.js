@@ -303,7 +303,7 @@ function renderVideo(d, keepTab = false) {
       <div class="rc-meta">
         <div class="rc-kickers">${mtBadge(d.media_type || 'video')}${d.max_badge && d.video.length ? `<span class="q-badge q-${esc(d.max_badge)}">${esc(d.max_badge)}</span>` : ''}</div>
         <h2 class="rc-title">${esc(d.title)}</h2>
-        ${d.uploader ? `<div class="rc-uploader"><span class="avatar">${esc(initial(d.uploader))}</span><span>${esc(d.uploader)}</span>${d.verified ? `<span class="verified" title="Verified">${icon('verified')}</span>` : ''}</div>` : ''}
+        ${d.account ? accountHtml(d.account) : d.uploader ? `<div class="rc-uploader"><span class="avatar">${esc(initial(d.uploader))}</span><span>${esc(d.uploader)}</span>${d.verified ? `<span class="verified" title="Verified">${icon('verified')}</span>` : ''}</div>` : ''}
         ${stats ? `<div class="rc-stats">${stats}</div>` : ''}
         ${d.description ? `<p class="rc-desc" id="rcDesc" title="${esc(t('rc.more'))}">${esc(d.description)}</p>` : ''}
         ${d.is_live ? `<div class="notice">${icon('alert')}<div>${esc(t('rc.live'))}</div></div>` : ''}
@@ -597,6 +597,36 @@ async function downloadSubtitle(btn, d) {
 const captionOf = (d) => (d.description || '').trim() || (d.title && d.title !== 'Untitled' ? d.title.trim() : '');
 const captionBtn = (d) => { const c = captionOf(d); return c ? `<button class="chip-btn" type="button" data-copy="${esc(c)}" title="${esc(t('rc.copyCaptionTip'))}">${icon('copy')}${esc(t('rc.copyCaption'))}</button>` : ''; };
 
+/* ------------------------------------------------------------------ account (author) of the post */
+const compactNum = (n) => (ui.lang === 'bn' ? fmtNum(n) : new Intl.NumberFormat('en-US', { notation: 'compact', maximumFractionDigits: 1 }).format(n));
+
+function accountHtml(a) {
+  if (!a || !(a.name || a.handle)) return '';
+  const handle = a.handle ? `@${a.handle}` : '';
+  const fol = a.followers != null ? t(a.kind === 'subscribers' ? 'acc.subscribers' : 'acc.followers', { n: compactNum(a.followers) }) : '';
+  const sub = [handle, fol].filter(Boolean).map(esc).join(' · ');
+  return `<div class="acc-card" role="group" aria-label="${esc(t('acc.title'))}">
+    <span class="acc-avatar" aria-hidden="true"><b>${esc(initial(a.name || a.handle))}</b>${a.avatar ? `<img class="acc-img" src="${esc(a.avatar)}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer">` : ''}</span>
+    <div class="acc-info">
+      <div class="acc-name"><span>${esc(a.name || handle)}</span>${a.verified ? `<span class="verified" title="${esc(t('acc.verified'))}">${icon('verified')}</span>` : ''}</div>
+      ${sub ? `<div class="acc-sub">${sub}</div>` : ''}
+    </div>
+    <div class="acc-actions">
+      ${a.url ? `<a class="chip-btn" href="${esc(a.url)}" target="_blank" rel="noopener noreferrer">${icon('external')}${esc(t('acc.open'))}</a>` : ''}
+      ${a.handle ? `<button class="chip-btn" type="button" data-copy="@${esc(a.handle)}">${icon('copy')}${esc(t('acc.copyHandle'))}</button>` : ''}
+      ${a.url ? `<button class="chip-btn" type="button" data-copy="${esc(a.url)}">${icon('link')}${esc(t('acc.copyLink'))}</button>` : ''}
+    </div>
+  </div>`;
+}
+// a broken avatar image simply disappears and the initial letter underneath stays
+document.addEventListener('error', (e) => { if (e.target?.classList?.contains('acc-img')) e.target.remove(); }, true);
+(() => { // styles for the account card load on demand (no change to the page template needed)
+  if (document.getElementById('accountCss')) return;
+  const l = document.createElement('link');
+  l.id = 'accountCss'; l.rel = 'stylesheet'; l.href = '/static/css/account-card.css';
+  document.head.appendChild(l);
+})();
+
 function renderGallery(d, keep = false) {
   const visual = d.items.filter((i) => i.type !== 'audio');
   if (!keep) state.gsel = new Set(visual.map((i) => i.index));
@@ -616,6 +646,7 @@ function renderGallery(d, keep = false) {
         <div class="rc-kickers">${mtBadge(d.media_type)}<span class="pl-kicker pf-${esc(d.platform)}">${brandIcon(d.platform)}${esc(pname(d.platform))}</span></div>
         <h2>${esc(d.title)}</h2>
         <div class="g-sub">${sub}</div>
+        ${d.account ? accountHtml(d.account) : ''}
         ${captionOf(d) ? `<div class="rc-links" style="margin-top:10px">${captionBtn(d)}</div>` : ''}
       </div>
     </div>

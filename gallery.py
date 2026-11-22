@@ -24,6 +24,7 @@ from urllib.parse import parse_qs, urlencode, urlparse, urlunparse
 
 import httpx
 
+from . import account as A
 from .config import settings
 from .monitor import monitor
 from .utils import clean_title, detect_platform, ext_from_content_type, is_public_http_url, sniff_media
@@ -131,6 +132,8 @@ def from_instagram(info: dict, source_url: str) -> dict | None:
         "description": caption[:5000],
         "uploader": p.get("username") or info.get("channel"),
         "uploader_url": f"https://www.instagram.com/{p['username']}/" if p.get("username") else None,
+        "account": A.make("instagram", name=p.get("full_name") or p.get("username"), handle=p.get("username"),
+                          avatar=p.get("avatar"), verified=p.get("verified")),
         "upload_date": _date(p.get("taken_at")),
         "items": items,
     })
@@ -202,6 +205,9 @@ def tiktok_photo(url: str) -> dict | None:
         "description": desc[:5000],
         "uploader": author.get("uniqueId") or author.get("nickname"),
         "uploader_url": f"https://www.tiktok.com/@{author['uniqueId']}" if author.get("uniqueId") else None,
+        "account": A.make("tiktok", name=author.get("nickname") or author.get("uniqueId"), handle=author.get("uniqueId"),
+                          avatar=author.get("avatarMedium") or author.get("avatarLarger") or author.get("avatarThumb"),
+                          verified=author.get("verified"), followers=(data.get("authorStats") or {}).get("followerCount")),
         "upload_date": _date(data.get("createTime")),
         "items": items,
     })
@@ -256,6 +262,9 @@ def twitter_media(url: str) -> dict | None:
         "description": text[:5000],
         "uploader": user.get("screen_name") or user.get("name"),
         "uploader_url": f"https://x.com/{user['screen_name']}" if user.get("screen_name") else None,
+        "account": A.make("twitter", name=user.get("name") or user.get("screen_name"), handle=user.get("screen_name"),
+                          avatar=(user.get("profile_image_url_https") or "").replace("_normal.", "_200x200."),
+                          verified=user.get("is_blue_verified") or user.get("verified"), followers=user.get("followers_count")),
         "upload_date": (status.get("created_at") or "")[:10] or None,
         "items": items,
     })

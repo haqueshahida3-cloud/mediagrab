@@ -112,6 +112,9 @@ export const EXTRA = {
     'e2.bot_check_required': 'Please complete the quick human check and try again.',
     'bot.rcPre': 'This site is protected by reCAPTCHA and the Google', 'bot.rcPrivacy': 'Privacy Policy', 'bot.rcAnd': 'and',
     'bot.rcTerms': 'Terms of Service', 'bot.rcPost': 'apply.',
+    // account card
+    'acc.title': 'Account', 'acc.open': 'Open profile', 'acc.copyHandle': 'Copy username', 'acc.copyLink': 'Copy profile link',
+    'acc.followers': '{n} followers', 'acc.subscribers': '{n} subscribers', 'acc.verified': 'Verified account',
   },
   bn: {
     'hero.title': '{p} থেকে ভিডিও ও ছবি<br>ডাউনলোড করুন', 'err.offline': 'আপনি অফলাইনে আছেন — ইন্টারনেট সংযোগ দেখুন।',
@@ -210,5 +213,8 @@ export const EXTRA = {
     'e2.bot_check_required': 'অনুগ্রহ করে দ্রুত মানুষ-যাচাইটি সম্পন্ন করে আবার চেষ্টা করুন।',
     'bot.rcPre': 'এই সাইটটি reCAPTCHA দ্বারা সুরক্ষিত এবং Google-এর', 'bot.rcPrivacy': 'গোপনীয়তা নীতি', 'bot.rcAnd': 'ও',
     'bot.rcTerms': 'পরিষেবার শর্তাবলী', 'bot.rcPost': 'প্রযোজ্য।',
+    // account card
+    'acc.title': 'অ্যাকাউন্ট', 'acc.open': 'প্রোফাইল দেখুন', 'acc.copyHandle': 'ইউজারনেম কপি', 'acc.copyLink': 'প্রোফাইল লিংক কপি',
+    'acc.followers': '{n} ফলোয়ার', 'acc.subscribers': '{n} সাবস্ক্রাইবার', 'acc.verified': 'ভেরিফায়েড অ্যাকাউন্ট',
   },
 };
