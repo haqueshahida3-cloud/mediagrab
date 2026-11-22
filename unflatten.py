@@ -3,6 +3,7 @@
 Also tolerates phone-style duplicate names ("name (1).js", "name(2).css": the newest copy wins) and any stray
 .js / .css file in the repo root (moved to static/js or static/css).
 """
+import filecmp
 import os
 import re
 import shutil
@@ -99,15 +100,20 @@ for base, items in copies.items():
             os.remove(extra)
         print(f"[unflatten] renamed {items[-1][1]!r} -> {base!r}")
 
-# 2) known files into their folders
+# 2) known files into their folders. A file uploaded flat in the repo root is the newest copy, so it WINS
+#    over an older copy that already sits in its folder (and the log says so).
 moved = 0
 for name, dest in MANIFEST.items():
-    if os.path.isfile(dest):
+    if not os.path.isfile(name):
         continue
-    if os.path.isfile(name):
-        os.makedirs(os.path.dirname(dest) or ".", exist_ok=True)
-        shutil.move(name, dest)
-        moved += 1
+    os.makedirs(os.path.dirname(dest) or ".", exist_ok=True)
+    if os.path.isfile(dest):
+        if filecmp.cmp(name, dest, shallow=False):
+            os.remove(name)  # identical, nothing to do
+            continue
+        print(f"[unflatten] root {name!r} replaces the older {dest!r}")
+    shutil.move(name, dest)
+    moved += 1
 
 # 3) unknown .js / .css files in the root are front-end assets
 for f in sorted(os.listdir(".")):
