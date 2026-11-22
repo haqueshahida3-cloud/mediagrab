@@ -75,7 +75,10 @@ MANIFEST = {
  "botguard.py": "app/botguard.py",
  "botguard.js": "static/js/botguard.js",
  "account.py": "app/account.py",
- "account-card.css": "static/css/account-card.css"
+ "account-card.css": "static/css/account-card.css",
+ "landing.html": "static/landing/index.html",
+ "landing.js": "static/landing/landing.js",
+ "landing.css": "static/landing/landing.css"
 }
 
 OPTIONAL_ASSETS = ["static/js/mediagrab-ux-upgrade.js", "static/js/dashboard-addon.js",

@@ -4,6 +4,7 @@ from __future__ import annotations
 import asyncio
 import io
 import mimetypes
+from pathlib import Path
 import re
 import shutil
 import time
@@ -543,5 +544,14 @@ async def tools_delete(upload_id: str):
 app.include_router(admin_router)
 app.include_router(botguard.router)
 app.include_router(pages.router)
+@app.get("/landing", include_in_schema=False)
+async def landing():
+    """Showcase page with the 3D platform-logo hero. Plain static files (built from the React project), no inline scripts."""
+    page = Path(settings.static_dir) / "landing" / "index.html"
+    if not page.is_file():
+        raise HTTPException(404, "Not found")
+    return FileResponse(page, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-cache"})
+
+
 app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")
 monitor.count("boot")
