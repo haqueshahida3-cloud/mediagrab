@@ -16,7 +16,7 @@ import httpx
 import yt_dlp
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.exceptions import RequestValidationError
-from fastapi.responses import FileResponse, JSONResponse, RedirectResponse, Response
+from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 from starlette.background import BackgroundTask
@@ -543,41 +543,7 @@ async def tools_delete(upload_id: str):
 # ---------------------------------------------------------------------------- admin + pages + static
 app.include_router(admin_router)
 app.include_router(botguard.router)
-
-
-def _landing_file() -> Path:
-    return Path(settings.static_dir) / "landing" / "index.html"
-
-
-def _landing_response() -> FileResponse:
-    return FileResponse(_landing_file(), media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-cache"})
-
-
-# "/" is the 3D landing page; the downloader itself lives at "/app" (it reuses the page handler that pages.py
-# registered for "/"). These routes must be registered BEFORE pages.router so they win for "/".
-@app.get("/", include_in_schema=False)
-async def home(request: Request):
-    if request.url.query:  # old links like /?url=... (bookmarklet, share target, ?lang=bn) go straight to the downloader
-        return RedirectResponse(f"/app?{request.url.query}", status_code=307)
-    if not _landing_file().is_file():
-        return RedirectResponse("/app", status_code=307)
-    return _landing_response()
-
-
-_home_route = next((r for r in pages.router.routes
-                    if getattr(r, "path", None) == "/" and "GET" in (getattr(r, "methods", None) or {"GET"})), None)
-if _home_route is not None:
-    app.add_api_route("/app", _home_route.endpoint, methods=["GET"], include_in_schema=False)
-
 app.include_router(pages.router)
-
-
-@app.get("/landing", include_in_schema=False)
-async def landing():
-    """Same 3D landing page, kept for old links."""
-    if not _landing_file().is_file():
-        raise HTTPException(404, "Not found")
-    return _landing_response()
 
 
 app.mount("/static", StaticFiles(directory=settings.static_dir), name="static")

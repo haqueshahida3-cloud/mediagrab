@@ -6,7 +6,7 @@ import time
 from datetime import datetime, timezone
 
 from fastapi import APIRouter, Request
-from fastapi.responses import FileResponse, HTMLResponse, Response
+from fastapi.responses import FileResponse, HTMLResponse, RedirectResponse, Response
 from jinja2 import Environment, FileSystemLoader, select_autoescape
 from markupsafe import Markup
 
@@ -38,7 +38,7 @@ BUILD_DATE = datetime.now(timezone.utc).strftime("%Y-%m-%d")
 
 # page key → (path, {lang: (title, description)}, sitemap priority)
 PAGES: dict[str, dict] = {
-    "home": {"path": "/", "prio": "1.0", "meta": {
+    "home": {"path": "/app", "prio": "0.9", "meta": {
         "en": ("MediaGrab — Download Videos, Photos & MP3 from YouTube, Facebook, Instagram, X & TikTok",
                "Free online downloader for YouTube, Facebook, Instagram, X (Twitter) and TikTok. Save videos in "
                "genuine HD, 4K and 8K, download photos, carousels and albums, or convert to MP3 — no signup."),
@@ -161,7 +161,27 @@ def _page(key: str, template: str | None = None):
     return handler
 
 
+# "/" is the 3D landing page; the downloader itself lives at "/app".
+APP_PARAMS = {"url", "text", "title", "open", "source", "lang"}  # old share links / bookmarklets / PWA launches
+
+
 @router.get("/")
+async def landing_page(request: Request):
+    if APP_PARAMS & set(request.query_params):  # e.g. /?url=… from the Android share sheet or a bookmarklet
+        qs = request.url.query
+        return RedirectResponse("/app" + (f"?{qs}" if qs else ""), status_code=302)
+    page = STATIC / "landing" / "index.html"
+    if not page.is_file():  # landing files missing: keep the site usable by showing the downloader
+        return render(request, "index.html", "home")
+    return FileResponse(page, media_type="text/html; charset=utf-8", headers={"Cache-Control": "no-cache"})
+
+
+@router.get("/landing")
+async def landing_alias():
+    return RedirectResponse("/", status_code=301)
+
+
+@router.get("/app")
 async def home(request: Request):
     return render(request, "index.html", "home")
 
@@ -191,7 +211,7 @@ def not_found(request: Request) -> HTMLResponse:
 @router.get("/sitemap.xml")
 async def sitemap(request: Request):
     base = base_url(request)
-    urls = []
+    urls = [f"<url><loc>{base}/</loc><lastmod>{BUILD_DATE}</lastmod><priority>1.0</priority></url>"]
     for p in PAGES.values():
         loc = base + p["path"]
         urls.append(

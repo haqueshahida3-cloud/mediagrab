@@ -115,12 +115,12 @@ function initAudio() {
       const d = await api('/api/info', { method: 'POST', body: { url } });
       if (d.type !== 'video' || !d.audio?.length) {
         res.innerHTML = `<div class="notice info" style="margin-top:14px">${icon('info')}<div>${esc(d.type === 'gallery' ? t('tl.photosD') : t('rc.noAudio'))}
-          <div style="margin-top:8px"><a class="chip-btn" href="/?url=${encodeURIComponent(url)}">${icon('external')}${esc(t('tl.openDownloader'))}</a></div></div></div>`;
+          <div style="margin-top:8px"><a class="chip-btn" href="/app?url=${encodeURIComponent(url)}">${icon('external')}${esc(t('tl.openDownloader'))}</a></div></div></div>`;
         return;
       }
       res.innerHTML = `<div class="file-row" style="margin:14px 0 10px"><div class="fr-thumb">${d.thumbnail ? `<img src="${esc(d.thumbnail)}" alt="" data-fallback>` : icon('film')}</div>
           <div style="min-width:0"><b>${esc(d.title)}</b><small>${esc(pname(d.platform))}${d.duration ? ' · ' + fmtDur(d.duration) : ''}</small></div>
-          <a class="chip-btn" href="/?url=${encodeURIComponent(url)}">${icon('external')}</a></div>
+          <a class="chip-btn" href="/app?url=${encodeURIComponent(url)}">${icon('external')}</a></div>
         <div class="fmt-list">${d.audio.map((a) => `<div class="fmt-row"><span class="q-badge ${a.label === 'MP3' ? 'q-AUD' : 'q-AUD2'}">${esc(a.label)}</span>
           <div class="fmt-main"><b>${esc(a.tier === 'kbps' ? `${localDigits(a.kbps)} kbps` : t('aq.' + a.tier))}</b><small>${esc(a.quality)}</small></div>
           <span class="fmt-size">${a.size ? '~' + fmtBytes(a.size) : '—'}</span>
@@ -276,7 +276,7 @@ function initFrame() {
       const thumbs = d.type === 'video' ? d.thumbnails : (d.items || []).filter((i) => i.preview).map((i) => ({ url: i.preview, download: null, label: i.label || '' }));
       if (!thumbs?.length) { res.innerHTML = errorBox(t('tl.noThumbs')); return; }
       res.innerHTML = `<div class="thumb-grid" style="margin-top:14px">${thumbs.map((th) => `<div class="thumb-card"><div class="ti"><img loading="lazy" src="${esc(th.url)}" alt="" data-fallback></div>
-        <div class="tf"><span>${esc(localDigits(th.label === 'Original' ? t('rc.original') : th.label))}</span>${th.download ? `<a class="chip-btn" href="${esc(th.download)}" download>${icon('download')}${esc(t('btn.save'))}</a>` : `<a class="chip-btn" href="/?url=${encodeURIComponent(url)}">${icon('external')}</a>`}</div></div>`).join('')}</div>`;
+        <div class="tf"><span>${esc(localDigits(th.label === 'Original' ? t('rc.original') : th.label))}</span>${th.download ? `<a class="chip-btn" href="${esc(th.download)}" download>${icon('download')}${esc(t('btn.save'))}</a>` : `<a class="chip-btn" href="/app?url=${encodeURIComponent(url)}">${icon('external')}</a>`}</div></div>`).join('')}</div>`;
     } catch (e) { res.innerHTML = errorBox(e); }
   });
   let videoUrl = null;
@@ -323,7 +323,7 @@ function initPhotos() {
       const d = await api('/api/info', { method: 'POST', body: { url } });
       if (d.type !== 'gallery') {
         res.innerHTML = `<div class="notice info" style="margin-top:14px">${icon('info')}<div>${esc(t('mt.' + (d.media_type || 'video')))} — ${esc(truncate(d.title, 80))}
-          <div style="margin-top:8px"><a class="chip-btn" href="/?url=${encodeURIComponent(url)}">${icon('external')}${esc(t('tl.openDownloader'))}</a></div></div></div>`;
+          <div style="margin-top:8px"><a class="chip-btn" href="/app?url=${encodeURIComponent(url)}">${icon('external')}${esc(t('tl.openDownloader'))}</a></div></div></div>`;
         return;
       }
       const visual = d.items.filter((i) => i.type !== 'audio');
@@ -355,7 +355,7 @@ function initMeta() {
     try {
       const d = await api('/api/formats', { method: 'POST', body: { url } });
       if (d.gallery || !d.formats.length) {
-        res.innerHTML = `<div class="notice info" style="margin-top:14px">${icon('info')}<div>${esc(t('tl.photosD'))}<div style="margin-top:8px"><a class="chip-btn" href="/?url=${encodeURIComponent(url)}">${icon('external')}${esc(t('tl.openDownloader'))}</a></div></div></div>`;
+        res.innerHTML = `<div class="notice info" style="margin-top:14px">${icon('info')}<div>${esc(t('tl.photosD'))}<div style="margin-top:8px"><a class="chip-btn" href="/app?url=${encodeURIComponent(url)}">${icon('external')}${esc(t('tl.openDownloader'))}</a></div></div></div>`;
         return;
       }
       const fm = [...d.formats].sort((a, b) => ((b.height ? Math.min(b.width || b.height, b.height) : 0) - (a.height ? Math.min(a.width || a.height, a.height) : 0)) || ((b.tbr || b.abr || 0) - (a.tbr || a.abr || 0)));

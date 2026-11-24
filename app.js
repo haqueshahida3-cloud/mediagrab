@@ -1471,7 +1471,7 @@ async function init() {
   updateBadge();
   renderQueue();
 
-  const bm = `javascript:(function(){window.open('${location.origin}/?url='+encodeURIComponent(location.href),'_blank');})();`;
+  const bm = `javascript:(function(){window.open('${location.origin}/app?url='+encodeURIComponent(location.href),'_blank');})();`;
   $('#bookmarklet').setAttribute('href', bm);
   $('#bookmarklet').addEventListener('click', (e) => e.preventDefault());
 

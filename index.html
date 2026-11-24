@@ -1,7 +1,7 @@
 {% extends "base.html" %}
 {% block jsonld %}
 <script type="application/ld+json">{{ ldjson({
-  "@context": "https://schema.org", "@type": "WebApplication", "name": app_name, "url": base + "/",
+  "@context": "https://schema.org", "@type": "WebApplication", "name": app_name, "url": base + "/app",
   "applicationCategory": "MultimediaApplication", "operatingSystem": "Any (web browser)", "browserRequirements": "Requires JavaScript",
   "description": description, "inLanguage": ["en", "bn"],
   "offers": {"@type": "Offer", "price": "0", "priceCurrency": "USD"},
@@ -114,7 +114,7 @@
       <div class="tool-card">
         <h3><i data-icon="bookmark"></i><span data-i18n="tools.bmTitle">One-click bookmarklet</span></h3>
         <p data-i18n="tools.bmDesc">Drag this button to your bookmarks bar. While watching any video, click it to open that video in MediaGrab instantly.</p>
-        <a class="bookmarklet" id="bookmarklet" href="/" draggable="true"><i data-icon="zap"></i>MediaGrab it!</a>
+        <a class="bookmarklet" id="bookmarklet" href="/app" draggable="true"><i data-icon="zap"></i>MediaGrab it!</a>
       </div>
       <div class="tool-card">
         <h3><i data-icon="smartphone"></i><span data-i18n="tools.appTitle">Install as an app</span></h3>
@@ -155,4 +155,4 @@
   <div id="dropOverlay" class="drop-overlay hidden"><div><i data-icon="download"></i><span data-i18n="drop.text">Drop the link to download</span></div></div>
 {% endblock %}
 
-{% block scripts %}<script type="module" src="/static/js/app.js?v={{ version }}"></script><script defer src="/static/js/dashboard-addon.js?v=1"></script>{% endblock %}
+{% block scripts %}<script type="module" src="/static/js/app.js?v={{ version }}"></script>{% endblock %}

@@ -3,7 +3,7 @@
   "short_name": "MediaGrab",
   "description": "Download videos in genuine HD, 4K or 8K, photos and carousels in original quality, or MP3 — YouTube, Facebook, Instagram, X & TikTok.",
   "id": "/",
-  "start_url": "/?source=pwa",
+  "start_url": "/app?source=pwa",
   "scope": "/",
   "display": "standalone",
   "display_override": ["window-controls-overlay", "standalone"],
@@ -20,11 +20,11 @@
     { "src": "/static/icons/favicon.svg", "sizes": "any", "type": "image/svg+xml" }
   ],
   "shortcuts": [
-    { "name": "Downloads", "short_name": "Downloads", "url": "/?open=downloads", "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }] },
+    { "name": "Downloads", "short_name": "Downloads", "url": "/app?open=downloads", "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }] },
     { "name": "Media Tools", "short_name": "Tools", "url": "/tools", "icons": [{ "src": "/static/icons/icon-192.png", "sizes": "192x192" }] }
   ],
   "share_target": {
-    "action": "/",
+    "action": "/app",
     "method": "GET",
     "params": { "title": "title", "text": "text", "url": "url" }
   },
